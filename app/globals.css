@@ -1,0 +1,9 @@
+:root { color-scheme: light; font-family: Arial, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f5f7fa; color: #172033; }
+main { width: min(640px, calc(100% - 2rem)); margin: 5rem auto; padding: 2rem; background: white; border: 1px solid #dce2ea; border-radius: 8px; }
+h1 { margin-top: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+button, .button { border: 0; border-radius: 5px; padding: 0.7rem 1rem; background: #185adb; color: white; font: inherit; text-decoration: none; cursor: pointer; }
+.secondary { background: #566276; }
+.hint { color: #566276; font-size: 0.9rem; }

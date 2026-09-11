@@ -1,0 +1,70 @@
+{
+  "realm": "nextjs-auth-demo",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "clients": [
+    {
+      "clientId": "nextjs-auth-demo",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://localhost:3000/auth/redirect",
+        "http://localhost:3000/silent-check-sso.html"
+      ],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "tide.createdViaConsole": "true",
+        "dpop.bound.access.tokens": "true",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "tidebrowser",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorConfig": "tide browser",
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 25,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "tide browser",
+      "config": { "defaultProvider": "tide" }
+    }
+  ],
+  "browserFlow": "tidebrowser",
+  "requiredActions": [
+    {
+      "alias": "link-tide-account-action",
+      "name": "Link Tide Account",
+      "providerId": "link-tide-account-action",
+      "enabled": true
+    }
+  ]
+}

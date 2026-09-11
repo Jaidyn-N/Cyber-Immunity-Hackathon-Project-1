@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+
+# Local secrets
+.env
+.env.local
+.env.*.local
+
+# TideCloak generated and local runtime data
+data/tidecloak.json
+data/keycloakdb*
+data/*.db
+data/*.log
+tidecloak/bootstrap-*.json
+tidecloak/admin-token*
+
+# Logs and editor files
+*.log
+.DS_Store
+.idea/
+.vscode/
