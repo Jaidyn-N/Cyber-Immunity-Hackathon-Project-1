@@ -534,3 +534,367 @@ used. No auth/config changed.
   deployed across attempts 2 and 3; the attempt-1 contract hash was never successfully deployed).
   Left in place deliberately (removing a committed policy is itself a governed action). Not used by any
   production code. Documented here so it is not mistaken for app functionality.
+
+---
+
+# Ownership Deny-Path Test — CONFIRMED (2026-09-07, live ORK network)
+
+## Setup
+- Reused the existing `OwnershipSpike` contract; deployed `contractId` fetched from the realm and
+  asserted == `72567527A84CA9F4…` before any governed step (matched: true). Contract source and the
+  security condition were NOT changed. No new policy created.
+- Original signed policy bytes were never persisted, so the identical policy was **re-signed once**
+  (one enclave approval, provided by the operator). Result: 465-byte signed policy — same size/shape as
+  the successful spike''s policy.
+- Signed policy bytes persisted locally to `test-artifacts-temp/OwnershipSpike.signed-policy.bin`
+  (465 bytes) so future allow/deny/transfer tests can reuse them WITHOUT another enclave approval.
+  This file is test-only and is NOT imported by any production/application code.
+- authenticated player vuid **A** = `88eae7da…0bf5f0` (real, from live token).
+- deliberately mismatched bound owner vuid **B** = `00000000…deadbeef` (64-hex, not A).
+- Same dummy item instance `spike-item-0001`, executed through the OwnershipSpike Forseti policy.
+
+## Expected vs actual
+- Expected: Forseti/ORKs REJECT because `boundOwnerVuid (B) != DokenDto.UserId (A)`; no threshold
+  signature produced.
+- Actual: **exactly that.**
+
+## Result: [Confirmed] — the deny path holds
+- [Confirmed] **All 20 of 20 ORKs independently denied** the request at `PreSign` with the contract''s
+  own message: `Forseti policy denied (Data, Executor): Executor vuid does not match the bound owner
+  vuid`. (Per-ORK gas 1497–5506, i.e. each ORK actually executed the contract.)
+- [Confirmed] Threshold was NOT reached (`TIDE-TIDEJS-NET-THRESHOLD_FAILURE: 0 of 20 required, 20
+  failed`). **No valid threshold signature was produced** (`signature_produced: false`).
+- [Confirmed] The rejection is an **intentional Tide/Forseti policy denial distributed across every
+  ORK** — NOT client-side validation and NOT an infrastructure failure. Evidence: the deny string is
+  the exact `PolicyDecision.Deny` text from `ValidateExecutor`, returned independently by all 20 ork
+  nodes at the `PreSign` stage; classification = `ORK_FORSETI_REJECTION`.
+
+## What is now proven (combined with the earlier success)
+- [Confirmed] Positive path (attempt 3): the ORKs threshold-sign item→owner-vuid ONLY for the matching
+  owner, and the signature verifies against the realm VVK.
+- [Confirmed] Negative path (this test): the ORKs REFUSE to sign when the executor vuid != bound owner
+  vuid. Together these establish that a Tide ownership statement''s authority is cryptographically bound
+  to the owner vuid: it cannot be minted for an owner the caller is not, and a DB `owner` row cannot
+  substitute for a VVK-verifiable signature. This fully answers PoC research question 1 for a single
+  item, both directions (grant + refuse).
+
+## What remains unproven (still out of scope; do NOT assume)
+- [Investigation] Ownership TRANSFER: re-binding an item to a second user''s (buyer) vuid. Not attempted.
+- [Investigation] SUPERSESSION: that a new attestation strips the previous owner''s authority and that a
+  superseded statement is not treated as current. Still the open design question; needs the transfer
+  test + "latest valid attestation wins" + a negative test that a superseded statement is rejected.
+- No persistence/inventory/equip/marketplace/UI — none built (deliberately).
+
+## Notes / constraints reconfirmed
+- [Constraint] The signed policy bytes are the reusable artifact; the contract source alone is not
+  enough to run a governed request. Persisting `policy.toBytes()` (done here) avoids future approvals
+  for allow/deny/transfer tests against this same policy.
+- [Constraint] Deny fires at `PreSign` before any partial signature — so a denied request costs ORK
+  compute (gas) but produces nothing signable; it does not consume an enclave approval (only the
+  policy deploy/re-sign does).
+
+---
+
+# Transfer / Supersession PoC (TESTS 1-4) — partial: TEST 1 CONFIRMED; TEST 2/3 BLOCKED (ORK Fabric 500)
+
+Scope: TESTS 1-4 only, reusing the existing OwnershipSpike contract + persisted signed policy
+(test-artifacts-temp/OwnershipSpike.signed-policy.bin, 465 bytes). No contract change, no new policy,
+no new enclave approval. Isolated temp test code under app/tide-transfer-temp + app/api/tide-transfer-temp.
+
+## TEST 1 — Player A initial ownership — [Confirmed]
+- Player A vuid = `88eae7dad1eee3e681ac8c009d65aad2b3d51f8745e8ca6c8a54f46f500bf5f0`.
+- Item = `spike-item-0001`.
+- Reused the persisted signed policy (465 bytes) with NO new enclave approval; signed
+  `(spike-item-0001 -> A.vuid)` via IMPLICIT executeSignRequest.
+- Result: 64-byte Ed25519 signature; **VVK verify = true**. A''s ownership statement re-established and
+  independently verified. Signature (hex): b619c3e4…ede000d. Saved as role A.
+
+## TEST 2 & 3 — transfer to Player B — [Blocked]
+- Blocked BEFORE the test could run: creating/authenticating **Player B** fails at account creation
+  with client error "Error creating user account. Network request failed".
+- **Root cause (infrastructure, NOT our code/policy):** the shared Tide ORK Fabric
+  (`ork1..24.tideprotocol.com`) is currently returning **500 Internal Server Error** on the
+  `TidecloakSessionStartTokenSign:1` signing model. TideCloak logs (2026-09-22 ~00:00:24-00:00:39):
+  `[Midgard] PromiseRace task[0..19] failed: ... 500 (Internal Server Error)` across all 20 ORKs →
+  `SignModel failed: Not enough orks returned an ok response` →
+  `Tide ORK signing failed during token encode: ... TidecloakSessionStartTokenSign:1`.
+- Account creation + new-session start require ORK threshold signing, which is what is 500-ing.
+- **Not our test code** (test page runs only post-login), **not the OwnershipSpike contract/policy**,
+  **not local config** (ORK roots return HTTP 200; Player A''s session and ownership-sign work).
+- **Intermittent:** A''s ownership sign (TEST 1) succeeded and a RealmAttestationExporter run succeeded,
+  interleaved with the 500s — characteristic of transient shared-test-Fabric instability (cf. the
+  earlier self-resolving auth loop).
+
+## TEST 4 — both statements independently valid — [Not reached / Investigation]
+- Cannot be executed without B''s signature (needs TEST 2/3). The verify-both harness is in place and
+  will independently verify A''s and B''s statements against the realm VVK once B can sign.
+
+## Supersession — [Unproven] (and design-limited regardless of the outage)
+- Independent of the outage, PRIOR ANALYSIS STANDS: the existing OwnershipSpike contract signs a
+  standalone `(item, ownerVuid)` statement with NO version/nonce/revocation and the ORKs keep no
+  per-item current-owner state. Therefore even once B signs, **A''s original signature will remain
+  cryptographically valid** — the contract provides owner-bound signing authority but **not**
+  revocation/supersession. Supersession would require application-side "current pointer" state and/or
+  a different (sequence/nonce-aware) contract — a governed change deliberately NOT made here.
+- Marked **UNPROVEN**; not to be solved yet per instruction.
+
+## What Tide/Forseti enforces vs not (confirmed so far)
+- Enforces: owner-bound signing (only executor whose doken vuid == bound owner vuid gets a signature;
+  positive path TEST 1/earlier spike, negative path earlier deny-test all-20-ORK reject).
+- Does NOT enforce (by this contract): revocation/supersession of a previously issued ownership
+  signature. Old signatures remain valid; "latest wins" is not a Tide-provided property here.
+
+## Manual action required
+- **Retry TEST 2/3 later** once the ORK Fabric recovers (the 500s on `TidecloakSessionStartTokenSign`
+  are server-side on the shared test ORKs). Practical check before retrying: attempt Player B account
+  creation again; if it still fails, re-inspect `docker logs tidecloak` for the same
+  `Not enough orks returned an ok response` signature. No config/policy/code change should be made to
+  "fix" this — it is an upstream ORK availability issue.
+- Player B must be a **Tide-linked** second account (reach dashboard once) to obtain a real vuid.
+
+---
+
+# Marketplace Beta Implementation — Tasks 0-3 (2026-09-07)
+
+Findings from building the beta application layer (Categories 1 and 2 of the marketplace-beta spec).
+This is the working application on top of the proven Tide PoC. It does NOT touch `OwnershipSpike`,
+Tide auth/DPoP config, or the Tide ownership research; the existing Tide findings below this section
+remain fully in force.
+
+## Task 0 — SQLite / native dependency
+
+- [Confirmed] `better-sqlite3@13.0.3` was introduced as the approved database dependency (plus
+  `@types/better-sqlite3@9.6.0` dev). It was the only runtime dependency added.
+- [Confirmed] The native binding loaded and completed an in-memory query round-trip on the development
+  machine — the module works here.
+- [Constraint] `better-sqlite3@13` ships **prebuilt platform binaries** (incl. `win32-x64.node`), so on
+  this Windows environment no native source compilation / build toolchain was required. (If the app is
+  ever moved to a platform without a matching prebuild, a compile step would be needed.)
+- [Confirmed] `npm run typecheck` and `next build --webpack` both passed after installation.
+- [Constraint] A transient typecheck failure after removing the temporary Tide-transfer test routes was
+  caused by **stale generated `.next/dev/types` references** to the deleted routes, NOT by application
+  source. Removing the generated type artifacts (they regenerate on dev/build) cleared it. This recurs
+  whenever a route is deleted — clear stale `.next` types rather than treating it as a code error.
+
+## Task 1 — SQLite schema (Layer A + separate Layer C)
+
+- [Confirmed] The schema (`lib/db/schema.sql`) covers the seven Layer A tables (player, item_template,
+  item_instance, shop_offer, purchase_record, marketplace_listing, marketplace_transaction) plus the
+  **separate** Layer C table `tide_ownership_attestation`.
+- [Constraint] SQLite type mapping in use: UUIDs as `TEXT` (app-generated, not rowids, for clean future
+  migration), booleans as `INTEGER 0/1` with CHECK constraints, timestamps as ISO-8601 `TEXT`.
+- [Confirmed] A **partial unique index** (`WHERE status = 'active'`) enforces at most one active
+  marketplace listing per item instance while still allowing re-listing after cancellation/sale. A
+  plain UNIQUE constraint would have wrongly blocked re-listing.
+- [Constraint] SQLite enforces foreign keys **per connection** (`PRAGMA foreign_keys = ON`), so this
+  became an explicit requirement of the application connection layer (Task 2), not just the schema file.
+- [Confirmed] Schema validation against a fresh DB exercised and confirmed: foreign-key enforcement,
+  the `currency_balance >= 0` CHECK, the `transfer_kind = 'application-level-temporary'` CHECK, the
+  `acquired_via IN ('shop','marketplace')` CHECK, and the active-listing uniqueness rule.
+
+## Task 2 — database architecture
+
+- [Confirmed] The app uses a **lazy, module-level singleton** SQLite connection (`lib/db/index.ts`) —
+  one shared connection, opened on first use (safe for `next build`).
+- [Confirmed] `PRAGMA foreign_keys = ON` is set explicitly on the real application connection (not
+  relying only on the schema file). `journal_mode = WAL` is enabled for the application database.
+- [Constraint] Database access is **server-side only** and isolated behind `lib/db/` repositories
+  (players, items, shop, marketplace). A runtime guard throws if the connection module is evaluated in a
+  browser context (no `server-only` npm dependency was added). Raw SQL is confined to the repository
+  layer and uses **parameterised** statements throughout.
+- [Confirmed] Layer A `item_instance.owner_vuid` and Layer C `tide_ownership_attestation.owner_vuid`
+  are deliberately separate columns in separate tables and are **not** automatically synchronised by any
+  repository method.
+- [Confirmed] The marketplace transfer path changes **only** Layer A ownership (`setOwnerVuid`) and
+  records a `marketplace_transaction` (`transfer_kind='application-level-temporary'`); it does not
+  create or modify a Tide ownership attestation.
+- [Confirmed] Repository validation confirmed that writing a Layer C attestation with a *different*
+  `owner_vuid` leaves the Layer A owner unchanged — the two layers stay independent.
+
+## Task 3 — server-side authentication (verified-JWT boundary)
+
+- [Confirmed] Server-side API authorization relies on **verified JWT claims**, not frontend auth state.
+  The existing client TideCloak/DPoP flow (login/logout, relay, config, dashboard) is unchanged; this
+  task only adds the server-side verification boundary in `lib/auth/`.
+- [Confirmed] JWTs are verified cryptographically with `jose` using the **embedded/local** JWK from the
+  existing TideCloak adapter (`data/tidecloak.json`) — local only, never remote (I-04). A token is never
+  trusted decoded without signature verification.
+- [Confirmed] The verifier checks the expected issuer (`<auth-server-url>/realms/<realm>`) and the
+  `azp === resource` relationship (TideCloak puts the client id in `azp`, not `aud`), plus `exp`/`iat`.
+- [Confirmed] A **non-empty `vuid`** is required and becomes the trusted application identity. `withAuth`
+  exposes it via an `AuthContext { vuid, token }`.
+- [Confirmed] A **client-supplied `vuid` cannot override** the `vuid` extracted from the verified token
+  (validated by test — the handler used the token vuid and ignored a body-supplied one).
+- [Confirmed] `withRole` checks realm/client roles from **verified token claims**, never from request
+  body/query. 401 if unauthenticated/unbound, 403 if authenticated but missing the role.
+- [Confirmed] The server requires `cnf.jkt` to be present for the existing DPoP-bound `secureFetch`
+  path (fail closed with 401 if absent).
+- [Constraint] The implementation does **not** independently verify the Tide-specific DPoP proof itself
+  (the `secureFetch` proofs are Tide-specific, not RFC 9449 compact JWS). It relies on the Tide
+  issuance/binding mechanism and asserts the `cnf.jkt` binding claim server-side (I-12). This is a
+  deliberate design choice, NOT RFC 9449 proof verification — do not imply otherwise.
+- [Confirmed] Automated validation covered: valid token accepted + vuid extracted; invalid signature,
+  expiry, wrong issuer, wrong azp, missing/empty vuid, missing DPoP `cnf.jkt`, and missing
+  authentication all rejected; `hasRole` realm+client; `withRole` role enforcement (403); and the
+  client-supplied-vuid substitution attempt (ignored).
+- [Constraint / Investigation] The automated tests used a **fixture Ed25519 keypair** (the loader
+  pointed at a fixture adapter via `CLIENT_ADAPTER`). They prove the JWT verification logic against real
+  cryptographic signatures, but they do **not** by themselves prove end-to-end acceptance of a
+  live Tide-issued token. Live-token verification will occur when the API routes are exercised against
+  the running TideCloak environment (Task 4+).
+
+## Validation method note (Tasks 1-3)
+
+- [Constraint] The project has no test framework installed; validation used throwaway Node scripts
+  (the project''s existing approach), removed after each run, with no permanent test artifacts added.
+  The repos/auth modules use extensionless relative imports (idiomatic for the Next.js bundler,
+  `moduleResolution: "bundler"`); raw Node ESM cannot resolve these, so validation scripts used a small
+  dev-only resolve hook. Correctness under the real toolchain is independently confirmed by
+  `npm run typecheck` and `next build --webpack` passing with the extensionless imports intact.
+
+## Relationship to the existing Tide findings (unchanged)
+
+The beta''s Layer A application ownership (`item_instance.owner_vuid`) and its temporary marketplace
+transfer do NOT affect, and are kept strictly separate from, the previously recorded Tide ownership
+research below: the confirmed Tide ownership signing, the vuid-bound signing, the all-20-ORK deny-path
+result, the Player B / ORK infrastructure blocker, and the confirmed limitation that `OwnershipSpike`
+provides owner-bound signing authority but NOT supersession/revocation. Those findings remain in force.
+
+## Task 4 — player / profile / currency API (2026-09-07)
+
+- [Confirmed] Implemented `GET /api/me` (`app/api/me/route.ts`): returns the authenticated player''s own
+  profile — `vuid`, `displayName`, `currencyBalance`, `equippedInstanceId`, `hasPrivateNote` (boolean),
+  `createdAt`. Built on the Task 3 `withAuth` → `AuthContext.vuid` → `getOrCreateCurrentPlayer` flow;
+  a new player row is auto-created on first call with a starting simulated balance.
+- [Confirmed] Identity is taken ONLY from the verified JWT. A `vuid` supplied in the request body does
+  not override it (tested). Per-`vuid` isolation confirmed: a different authenticated caller gets their
+  own auto-created record.
+- [Confirmed] The route exposes a **safe projection** — the Tide-self-encrypted `private_note_ciphertext`
+  blob is never returned (only a `hasPrivateNote` boolean). Sensitive DB fields are not leaked.
+- [Confirmed] Added guarded currency helpers to `lib/db/players.ts` for later tasks (shop/marketplace):
+  `creditBalance` (rejects negative amounts), `debitBalance` (guards server-side and throws
+  `InsufficientFundsError` before mutating if funds are short), and an `InsufficientFundsError` class.
+  Currency non-negativity is enforced at BOTH layers: server-side guard AND the schema
+  `CHECK (currency_balance >= 0)`. Validation confirmed a raw negative update is rejected by the DB CHECK.
+- [Confirmed] Persistence: a player''s balance survives closing and reopening the SQLite connection
+  (same `data/app.db` file) — i.e. it persists across an application restart, not just within a session.
+- [Constraint] Node''s TypeScript **strip-only** runtime (used by the throwaway validation scripts) does
+  not support **parameter properties** (`constructor(public readonly x: ...)`). This is a validation-tool
+  limitation, not a build limitation (Next.js/webpack transpiles fully), but `InsufficientFundsError` was
+  rewritten with explicit field declarations to keep the code strip-mode-compatible for validation.
+  General note for later tasks: avoid TS parameter properties in `lib/` so the Node validation scripts run.
+- [Confirmed] Validation (project''s throwaway-Node-script approach; fixture Ed25519 key for real
+  signature checks; temp DB; removed after): 9/9 passed — currency guards + DB CHECK backstop;
+  `GET /api/me` unauthenticated/malformed/missing-cnf.jkt → 401; authenticated returns own safe profile
+  (no ciphertext); client-supplied vuid cannot override; per-vuid isolation with auto-create; balance
+  persists across connection close/reopen. `npm run typecheck` and `next build --webpack` both pass;
+  the build lists `/api/me` as a dynamic route.
+- [Investigation] Same live-token limitation as Task 3 stands: `/api/me` was validated with a
+  fixture-signed token, not a live Tide-issued one. End-to-end acceptance of a real TideCloak
+  `secureFetch` token against `/api/me` will be observed once the frontend calls it (Task 15/16).
+- Category 3 (Tide-backed transfer/supersession) and the Player B / ORK blocker are untouched by this task.
+
+## Task 5 — inventory retrieval (2026-09-07)
+
+- [Confirmed] Implemented `GET /api/inventory` (`app/api/inventory/route.ts`): returns the item
+  instances whose Layer A `owner_vuid` matches the VERIFIED JWT vuid, each with template details
+  (name, category, rarity, tradable), acquisition info (`acquiredVia`, `acquiredAt`), an `owned: true`
+  marker, and an `equipped` flag computed from the player''s `equipped_instance_id`. Also returns
+  `equippedInstanceId` and a `count`.
+- [Confirmed] Reused the existing architecture with no new mechanism: `withAuth` →
+  `getOrCreateCurrentPlayer` → the Task 2 repository `items.listInstancesForOwner(vuid)`. The
+  ownership filter (`WHERE owner_vuid = ?`) lives in the repository (parameterised); no raw SQL was
+  added outside `lib/db/`.
+- [Confirmed] Identity/security: the vuid comes only from the verified token; a body-supplied `vuid`
+  cannot override it (tested). Cross-player isolation confirmed — player A never sees player B''s
+  instances and vice-versa. No Layer C attestation, OwnershipSpike, or DPoP config touched.
+- [Constraint] The approved schema/design has **no `description` column** on `item_template`; "item
+  details" for the UI are the defined fields (name, category, rarity, equipped) per Requirement 3.3.
+  A description field was deliberately NOT added — that would be scope expansion beyond the approved
+  design. If a richer description is wanted later it is a schema/design change, not part of Task 5.
+- [Confirmed] Validation (throwaway Node script; fixture Ed25519 key; temp DB; removed after): 8/8
+  passed — unauthenticated → 401; missing `cnf.jkt` → 401; authenticated retrieval returns own items
+  with details + equipped flag; only the verified player''s items returned; cross-player isolation;
+  client-supplied vuid cannot override; empty inventory returns count 0; inventory persists across
+  connection close/reopen (restart). `npm run typecheck` and `next build --webpack` both pass;
+  build lists `/api/inventory` as a dynamic route.
+- [Investigation] Same standing limitation as Tasks 3-4: validated with a fixture-signed token, not a
+  live Tide-issued one; live-token acceptance will be observed when the frontend calls `/api/inventory`
+  (Task 15/16). Category 3 and the Player B / ORK blocker are untouched.
+
+## Task 6 — equipping and avatar state (2026-09-07)
+
+- [Confirmed] Implemented `app/api/inventory/equip/route.ts`:
+  - `POST /api/inventory/equip { instanceId }` — equip an item the verified player owns; `instanceId: null`
+    unequips (clears the slot).
+  - `GET /api/inventory/equip` — return the caller''s current `equippedInstanceId`.
+- [Confirmed] Reused existing implementation with NO new mechanism, NO new DB fields/tables: `withAuth`
+  + `getOrCreateCurrentPlayer` (identity), `items.getInstance`/`items.isOwnedBy` (Layer A ownership
+  check), `players.getEquipped`/`players.setEquipped` (the existing `player.equipped_instance_id`
+  field). `/api/inventory` already reports the `equipped` flag (Task 5) and continues to do so.
+- [Confirmed] Server-side ownership/security: the vuid is taken only from the verified JWT; before
+  changing `equipped_instance_id` the route requires the item to exist (404 if not) AND be owned by the
+  verified vuid (`isOwnedBy`, else 403). A body-supplied `vuid`/`owner_vuid` is ignored — only
+  `instanceId` is read. `cnf.jkt` DPoP binding still required (inherited from `withAuth`).
+  Layer A ownership stays separate from Layer C; no Tide attestation/OwnershipSpike/DPoP config touched.
+- [Confirmed] Validation (throwaway Node script; fixture Ed25519 key; temp DB; removed after): 11/11
+  passed — unauthenticated → 401; missing `cnf.jkt` → 401; equip own item; inventory reports correct
+  equipped item; cannot equip another player''s item (403, equipped unchanged); client-supplied
+  vuid/owner cannot override; non-existent item → 404; invalid `instanceId` type → 400; unequip (null)
+  clears the slot; equipped state persists across DB close/reopen; per-player equipped isolation
+  (equipping B''s item does not affect A). `npm run typecheck` and `next build --webpack` both pass;
+  build lists `/api/inventory/equip` as a dynamic route.
+- [Constraint] Avatar representation is intentionally minimal: the "avatar" is the equipped item id +
+  its template details (name/category/rarity via `/api/inventory`); detailed artwork/complex
+  customisation is out of scope per the approved design.
+- [Investigation] Live-token acceptance remains deferred (validated with a fixture-signed token), to be
+  observed when the frontend calls these routes (Task 15/16).
+- Category 3 (Tide-backed transfer/supersession), the Player B flow, and the ORK blocker remain blocked
+  and untouched by this task.
+
+## Task 7 — randomised / rotating limited shop (2026-09-07)
+
+- [Confirmed] Implemented the limited shop:
+  - `lib/db/seed.ts` — idempotent catalogue of 8 cosmetic item templates (PUBLIC; the pool the shop
+    draws from; NOT admin hand-picking of current stock). `ensureCatalogueSeeded()` seeds only if empty.
+  - `lib/shop/rotation.ts` — deterministic-per-window, randomised-across-windows selection.
+  - `lib/db/shop.ts` — added `hasOffersForWindow` + `materialiseRotation` (idempotent, transactional).
+  - `app/api/shop/route.ts` — `GET /api/shop` returns the current rotation.
+- [Confirmed] Rotation/randomisation: the current rotation is identified by its **time window**
+  (WINDOW = 1 hour) and selection is a seeded shuffle (mulberry32, seed = window-start seconds) of the
+  catalogue, capped at **SHOP_CAPACITY = 4**. Because the seed is the window start, **every request in
+  the same window computes the identical selection** (refreshes do NOT reshuffle); a new window
+  produces a new selection; the same item can reappear in a later window. (These two numbers — 1h
+  window, capacity 4 — were left unspecified by the approved design; chosen as the smallest sensible
+  values and recorded here. No rarity/economy mechanics were added; price = template `base_price`.)
+- [Confirmed] Active-window determination + persistence: `GET /api/shop` seeds the catalogue, computes
+  the window rotation, then `materialiseRotation` (one transaction) **deactivates expired offers**
+  (`window_end <= now`) and **inserts this window''s offers only if not already present** (deterministic
+  offer id `<windowStartIso>::<templateId>`), and returns `listActiveOffers(now)` (active=1 AND
+  window_start <= now < window_end). Off-window offers are therefore not current and not purchasable
+  (`isOfferPurchasable` false). This also gives Task 8 stable offer ids to validate against.
+- [Confirmed] Reused existing architecture: `withAuth` (verified JWT -> vuid, `cnf.jkt` required),
+  the existing `shop_offer`/`item_template` schema, and `lib/db/shop.ts`/`items.ts`. No new tables or
+  fields. The shop is player-agnostic and never reads or writes any player''s inventory.
+- [Confirmed] Purchased ownership survives rotation: expiring/deactivating offers does not touch
+  `item_instance.owner_vuid`; a player''s owned instance is unchanged after an offer expires (tested).
+- [Confirmed] Validation (throwaway Node script; fixture Ed25519 key; temp DB; removed after): 12/12
+  passed — unauthenticated → 401; missing `cnf.jkt` → 401; authenticated retrieval (capacity respected,
+  details+price present); rotation consistent across repeated requests; deterministic per window and
+  changes across windows; item can reappear in a future rotation; off-window offers not current / not
+  purchasable; active count within capacity; player ownership survives expiry; shop player-agnostic and
+  exposes no inventory (client vuid cannot alter it); rotation persists across DB close/reopen; empty
+  catalogue handled safely (zero offers).
+- [Confirmed] `npm run typecheck` passes. `next build --webpack` compiles successfully and lists
+  `/api/shop` (with `/api/me`, `/api/inventory`, `/api/inventory/equip`).
+- [Constraint] **Build flakiness on this OneDrive path (environmental, not code):** `next build`
+  intermittently exits 1 with `EPERM: operation not permitted, unlink '.next\server\app\api\shop'` —
+  a transient OneDrive/AV lock on the stale `.next` artifact during finalisation. The compile + page
+  generation succeed every time; only the final artifact cleanup races the lock. **Workaround:** delete
+  `.next` before building (`Remove-Item .next -Recurse -Force`), then build — verified `EXIT=0`,
+  `Compiled successfully`. This will recur on the synced path; it is not a defect in the app.
+- [Investigation] Live-token acceptance remains deferred (validated with fixture-signed tokens);
+  observed when the frontend calls `/api/shop` (Task 15/16).
+- Layer A / Layer C separation preserved (shop touches only Layer A `shop_offer`/`item_template`;
+  no Tide attestation). Category 3 (Tide-backed transfer/supersession), the Player B flow, and the ORK
+  blocker remain blocked and untouched.

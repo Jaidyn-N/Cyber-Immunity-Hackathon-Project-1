@@ -20,3 +20,7 @@ tidecloak/admin-token*
 .DS_Store
 .idea/
 .vscode/
+
+# Temporary local test artifacts (signed policy bytes for ownership tests; not app code)
+test-artifacts-temp/
+
