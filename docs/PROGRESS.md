@@ -1,4 +1,4 @@
-﻿# Project Progress Checkpoint
+# Project Progress Checkpoint
 
 > Purpose: a resume-from-here record so a fresh Kiro session (e.g. after moving the repo off OneDrive)
 > can continue without the chat history. The authoritative detail lives in `docs/LEARNINGS.md` and
@@ -84,11 +84,26 @@ DONE and approved:
       `lib/db/shop.ts`): validate active/in-window offer + funds (`debitBalance`), `createInstance`
       (owner=caller, acquired_via=''shop''), `recordPurchase` — all in one transaction (rollback on failure).
 
+- [x] Task 9 — marketplace listings: `GET /api/marketplace` (active listings + item details),
+      `POST /api/marketplace/list` (create, with server-side eligibility: owns + tradable + not equipped
+      + not already listed; non-negative integer price), `GET /api/marketplace/list` (own listings),
+      `DELETE /api/marketplace/list/[id]` (owner-scoped cancel). Layer A only — no ownership change,
+      no transaction, no Tide attestation. Repo: `createListingWithEligibility`, `cancelListing`,
+      `listActiveListingsWithDetails`, `listListingsForSeller` in `lib/db/marketplace.ts`.
+
+- [x] Task 10 — temporary **application-level** (Layer A) marketplace transfer + transaction records:
+      `POST /api/marketplace/obtain` (atomic `obtainListing` in `lib/db/marketplace.ts`): validate active
+      listing + seller still owns + buyer≠seller + buyer funds → debit buyer / credit seller → move
+      `item_instance.owner_vuid` seller→buyer (Layer A ONLY) → clear equipped slot → record
+      `marketplace_transaction` (`transfer_kind='application-level-temporary'`) → mark listing `sold`,
+      all in ONE transaction (full rollback on any fault). Does NOT touch Layer C
+      (`tide_ownership_attestation`), OwnershipSpike, Tide policies, DPoP, or the schema. Buyer identity
+      = verified JWT vuid only; body buyer/seller/owner vuids ignored.
+
 NEXT — start here in the new session:
-- [ ] Task 9 — marketplace listings (`/api/marketplace/list`, `/api/marketplace`).
-- [ ] Task 10 — temporary Layer A marketplace transfer + transaction records (`/api/marketplace/obtain`).
 - [ ] Task 11 — QEA-governed `_tide_privatenote.*` voucher-gate role grant (GATE; STOP-AND-REPORT if
       ORK/QEA blocked; do not weaken).
+
 - [ ] Task 12 — Tide-protected private note (self-encryption; `GET/PUT /api/account/private-note`; `app/account`).
 - [ ] Task 13 — player isolation/security checks.
 - [ ] Task 14 — admin/RBAC surface (`/api/admin/*` withRole('admin')) + QEA doc.

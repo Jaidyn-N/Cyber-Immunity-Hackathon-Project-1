@@ -1022,3 +1022,85 @@ made here.
   verify-both attempt failed with `JWK member "kty" missing` because the client `getConfig()` jwk shape
   differed; fixed by serving the raw embedded VVK jwk from `data/tidecloak.json` via the temp route and
   importing that. Not an implementation issue with the attestations.
+
+## Task 9 — marketplace listings (2026-10-01)
+
+- [Confirmed] Implemented the marketplace **listing** layer (Task 10 obtaining/transfer NOT started):
+  - `GET /api/marketplace` — active listings joined to item/template details (name, category, rarity,
+    price, sellerVuid, createdAt). Public listing info only; no private player profile/inventory/contact.
+  - `POST /api/marketplace/list` — create a listing for the verified caller.
+  - `GET /api/marketplace/list` — the caller''s own listings (all statuses).
+  - `DELETE /api/marketplace/list/[id]` — owner-scoped cancel of the caller''s own active listing.
+  - Repository (parameterised SQL, existing patterns, no second DB abstraction):
+    `createListingWithEligibility`, `cancelListing`, `listActiveListingsWithDetails`,
+    `listListingsForSeller` in `lib/db/marketplace.ts` (reusing `createListing`/`getListing`/
+    `getActiveListingForInstance`/`setListingStatus`).
+- [Confirmed] Eligibility enforced SERVER-SIDE in one transaction (`createListingWithEligibility`):
+  item exists (404), owned by the verified vuid (403), template `tradable` (409), not equipped (409),
+  not already actively listed (409). A client-supplied `owner_vuid` is ignored — ownership is read from
+  `item_instance.owner_vuid` against the verified JWT vuid. The partial-unique index on active listings
+  is the concurrency backstop (a racing duplicate maps cleanly to `already_listed`, not a raw SQL error).
+- [Confirmed] Price validated server-side: must be a **non-negative integer** (simulated currency;
+  schema `INTEGER CHECK (price >= 0)`). Rejected (400): missing, non-numeric (string), non-integer
+  (decimal), negative. The client supplies instanceId + price; the server decides ownership/eligibility.
+- [Confirmed] Cancel is owner-scoped: the UPDATE matches `id AND seller_vuid AND status='active'`, so a
+  player cannot cancel another player''s listing (403) and cannot double-cancel (409 `not_active`).
+  Re-listing an item after its listing is cancelled is allowed (tested).
+- [Confirmed] Validation (throwaway Node script; fixture Ed25519 key; temp DB; removed after): 19/19
+  passed — unauthenticated → 401; missing `cnf.jkt` → 401; A listing B''s item → 403; non-numeric /
+  missing / non-integer / negative price → 400; non-tradable → 409; equipped → 409; list own eligible →
+  200; already-listed → 409; nonexistent item → 404; GET active listing shows details with no private
+  data; A cannot cancel B''s listing → 403 (B''s listing stays active); player cancels own → 200;
+  cancelled no longer active; re-list after cancel allowed; and **listing/cancel created NO
+  tide_ownership_attestation**. `npm run typecheck` and `next build --webpack` both pass; build lists
+  `/api/marketplace`, `/api/marketplace/list`, `/api/marketplace/list/[id]`.
+- [Confirmed] Layer separation preserved: Task 9 uses **Layer B** (verified JWT → vuid) to authenticate
+  and **Layer A** (`item_instance`, `marketplace_listing`) to manage listings. Creating/cancelling a
+  listing does NOT change `item_instance.owner_vuid`, does NOT create a `marketplace_transaction`, and
+  does NOT write/read `tide_ownership_attestation` or touch `OwnershipSpike`/Tide policies/DPoP/TideCloak
+  config. A listing is explicitly NOT a Tide-backed ownership transfer.
+- [Investigation] Live-token acceptance remains deferred (fixture-signed tokens); observed at frontend
+  integration (Task 15/16).
+- Category 3 (Tide-backed transfer/supersession) unchanged: rebinding demonstrated (2026-10-01),
+  supersession unresolved — untouched by this task.
+
+## Task 10 — temporary application-level marketplace transfer ("obtain") + transaction records (Layer A)
+
+- [Confirmed] Built `POST /api/marketplace/obtain` (thin `withAuth` route) over a new atomic
+  `obtainListing(buyerVuid, listingId)` in `lib/db/marketplace.ts`, mirroring the Task 8 `purchaseOffer`
+  transaction pattern (`const tx = db.transaction((): Result => {...}); return tx();`, discriminated-union
+  result). One better-sqlite3 transaction does, in order: resolve listing (not_found) → require active
+  (not_active) → resolve instance (not_found) → consistency guard: seller must still own the instance
+  (seller_no_longer_owns) → reject buyer==seller (cannot_obtain_own) → guarded `debitBalance(buyer)`
+  (insufficient_funds, no state change) → `creditBalance(seller)` → `setOwnerVuid(instance, buyer)`
+  (Layer A ONLY) → `clearEquippedByInstance` → `recordTransaction(transfer_kind='application-level-temporary')`
+  → `setListingStatus(listing,'sold')`. Any unexpected throw propagates and rolls the whole transaction back.
+- [Confirmed] Identity boundary: buyer vuid is the verified JWT `auth.vuid` only. The route honours
+  ONLY `listingId` from the body and explicitly ignores any `buyerVuid`/`sellerVuid`/`ownerVuid`. Reason
+  → HTTP mapping: not_found→404, not_active→409, seller_no_longer_owns→409, cannot_obtain_own→409,
+  insufficient_funds→402. Success response uses application-level wording
+  (`message:'application-level transfer completed'`), never "Tide ownership transferred"/"cryptographic".
+- [Confirmed] **Layer A boundary held.** The transfer updates ONLY `item_instance.owner_vuid` and writes
+  a `marketplace_transaction`; it does NOT read/write `tide_ownership_attestation`, does NOT call
+  `OwnershipSpike`, and does NOT touch Tide policies / DPoP / TideCloak config / `lib/db/schema.sql`.
+- [Confirmed] Validation (throwaway Node script, resolve-hook mapping `@/` + extensionless `.ts`, temp DB
+  via `APP_DB_PATH`, removed after): 40/40 assertions passed. Covered: successful transfer (owner A→B,
+  listing `sold`, exactly one `marketplace_transaction` with `transfer_kind='application-level-temporary'`
+  and correct price/parties, buyer debited + seller credited by price, seller's equipped slot cleared);
+  non-existent listing → not_found; sold → not_active; cancelled → not_active; seller no longer owns →
+  seller_no_longer_owns (no transfer); buyer==seller → cannot_obtain_own; insufficient funds →
+  insufficient_funds with NO state change (owner/balances/listing all unchanged, no txn row).
+- [Confirmed] **Atomicity (fault injection):** spying on `db.prepare` to throw at the
+  `marketplace_transaction` INSERT caused FULL rollback — owner_vuid unchanged, both balances unchanged,
+  listing still `active`, zero transaction rows, and the error propagated (not swallowed).
+- [Confirmed] **Replay/race:** two sequential `obtainListing` calls on the same listing — the first
+  succeeds, the second fails `not_active`; owner stays the first buyer and the second buyer is never
+  debited. No double transfer.
+- [Confirmed] **Tide-boundary assertion:** after a successful obtain, `listAttestationsForInstance` is
+  unchanged and the whole DB holds zero `tide_ownership_attestation` rows. Application-level ownership
+  transfer demonstrated; Tide-backed exclusive ownership transfer remains outside this task.
+- [Confirmed] `npm run typecheck` clean and `next build --webpack` compiled successfully off OneDrive
+  (no EPERM); build route list includes `/api/marketplace/obtain`. No diff to `data/tidecloak.json`,
+  `lib/db/schema.sql`, any Forseti `.cs`, `OwnershipSpike`, or Tide policies.
+- Category 3 (Tide-backed transfer / supersession / revocation) unchanged and still out of beta scope:
+  rebinding demonstrated (2026-10-01), supersession unresolved — untouched by this task.
