@@ -1104,3 +1104,78 @@ made here.
   `lib/db/schema.sql`, any Forseti `.cs`, `OwnershipSpike`, or Tide policies.
 - Category 3 (Tide-backed transfer / supersession / revocation) unchanged and still out of beta scope:
   rebinding demonstrated (2026-10-01), supersession unresolved — untouched by this task.
+
+---
+
+# Task 11 — QEA-governed voucher-gate role grant (IGA governance demonstration) (2026-10-01)
+
+Scope: BUILD the legitimate integration that INITIATES a governed grant of the private-note voucher-gate
+role(s) through the EXISTING Tide IGA/QEA change-request mechanism, plus the validation that does not
+require a live quorum. Status: **implemented — pending live QEA verification** (NOT fully confirmed).
+This task demonstrates Tide **GOVERNANCE** (Layer B / IGA), NOT Layer C cryptographic item ownership —
+the two are kept explicitly distinct and this grant is never described as proof of item ownership. The
+Player B / supersession findings (above) are unchanged by this task.
+
+- [Confirmed] **Protected role(s) / hard allowlist.** The grant target is server-side-restricted to
+  EXACTLY `_tide_privatenote.selfencrypt` and `_tide_privatenote.selfdecrypt` (the voucher-gate roles
+  Task 12's self-encryption needs, per design.md §2 / tasks.md Task 11). The allowlist is a constant
+  (`PRIVATE_NOTE_ROLE_ALLOWLIST` in `lib/tide/igaAdmin.ts`); the route rejects anything else with
+  400/422 BEFORE any change-request is initiated, so a client can never grant an arbitrary role
+  (e.g. `admin`, `realm-management`). (The constant lives in the lib module, not the route file, because
+  Next.js route modules may only export HTTP handlers + framework config.)
+
+- [Confirmed] **Governance is Tide IGA, not a custom system.** The only governance mechanism is the
+  realm's existing IGA/QEA. The app creates NO approval table, NO quorum logic, NO application-level QEA
+  state, and NO fake approval UI. `lib/tide/igaAdmin.ts` performs the standard Keycloak admin
+  realm role-mapping write (`POST /admin/realms/{realm}/users/{userId}/role-mappings/realm`) against the
+  IGA-enabled realm; on an IGA realm that write is CAPTURED into a change-request and returns
+  **202 Accepted** + a `Location` header → the new CR (verified Tide IGA surface, canon
+  `iga-change-requests-api`). Read helpers use `GET /iga/change-requests?status=PENDING` and
+  `GET /iga/change-requests/{id}`.
+
+- [Confirmed] **Pending-not-granted behaviour.** The route treats the 202/CR as PENDING, NOT applied:
+  it returns `{ ok:true, status:'pending', message:'...NOT granted until the Tide QEA quorum approves
+  and commits via the admin enclave', changeRequest:{id,status} }` and NEVER reports a role as effective.
+  A non-202 2xx (an immediate apply with no CR) is treated as a governance failure and rejected (fail
+  closed) — the realm must enforce governance for success to be reported. Design rule honoured: a 2xx
+  from an admin write is "accepted, not applied"; state must be re-read before claiming success.
+
+- [Confirmed] **Identity boundary + authorization (headless, server-side).** `withRole('admin')`:
+  unauthenticated → 401, non-admin player → 403, admin → passes. A DPoP-downgrade token (no `cnf.jkt`)
+  → 401. The requesting admin identity is taken from the verified JWT `vuid` ONLY; a body-supplied
+  `requestedBy`/`admin` field is ignored. `targetVuid` must be 64-hex. These are the checks exercisable
+  without a live quorum.
+
+- [Confirmed] **Validation (throwaway Node `.mjs` + resolve-hook mapping `@/`/extensionless → `.ts`,
+  fixture Ed25519 JWT, IGA HTTP stubbed at the `lib/tide/igaAdmin.ts` fetch seam `_setFetchForTests`,
+  removed after):** 54/54 assertions passed — auth gates (401/403/401-no-cnf), allowlist rejects
+  arbitrary roles with `initiate NEVER called`, allowlisted role → `initiate` called exactly once +
+  `status:'pending'` + CR id surfaced + response never claims "granted", body requester ignored
+  (requestedBy = JWT vuid), 202-CR → pending, immediate-apply (200 no CR) → 5xx, connection-refused →
+  5xx + `ok:false` + "unavailable", missing admin credential → fail closed (governed write never
+  attempted), GET status admin-only + read-only. Stubbing exercises app-side wiring ONLY — it is NOT a
+  claim that live QEA ran.
+
+- [Constraint] **Requester self-approval (four-eyes) — documented, NOT yet live-verified.** By the IGA
+  model the requester does not count toward quorum and a self/conflicting approval returns 409; the app
+  deliberately contains no approve/commit path, so this is an expectation carried from the IGA surface
+  docs, not something this task exercised live.
+
+- [Constraint] **Environment limits — what was NOT verified (requires TideCloak running + a human
+  enclave signature):** TideCloak was NOT running (localhost:8080 refused), and the realm is in
+  MultiAdmin (Tide) mode, so a governed CR can only be APPROVED+committed via a browser-enclave
+  signature (`POST /iga/change-requests/{id}/approve`) — a headless process cannot complete it by design
+  (that is the security property). Therefore the live change-request→approve→commit, the actual
+  quorum/threshold value, the requester-self-approval refusal, and the role becoming effective only
+  post-commit are all DEFERRED to a manual enclave step. No live QEA success is claimed.
+
+- [Constraint] **Private-note dependency (Task 12) deferred.** The end-to-end "without role → denied /
+  with QEA-approved role → private note available" check depends on Task 12 (not implemented) AND the
+  live grant above; it is deferred. No plaintext fallback or fake success path was added.
+
+- [Confirmed] **Boundaries held.** `npm run typecheck` clean; `next build --webpack` compiled
+  successfully (after clearing `.next` for the known OneDrive EPERM finalisation lock); build route list
+  includes `/api/admin/private-note-role`. `git diff` shows NO change to `data/tidecloak.json`,
+  `lib/db/schema.sql`, any Forseti `.cs`, `OwnershipSpike`, Tide policies, DPoP/auth config, or the
+  marketplace/ownership logic (`obtainListing` / `app/api/marketplace/obtain`). Only new files added:
+  `lib/tide/igaAdmin.ts`, `app/api/admin/private-note-role/route.ts`.

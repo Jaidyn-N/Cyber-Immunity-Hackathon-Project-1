@@ -100,9 +100,27 @@ DONE and approved:
       (`tide_ownership_attestation`), OwnershipSpike, Tide policies, DPoP, or the schema. Buyer identity
       = verified JWT vuid only; body buyer/seller/owner vuids ignored.
 
-NEXT — start here in the new session:
-- [ ] Task 11 — QEA-governed `_tide_privatenote.*` voucher-gate role grant (GATE; STOP-AND-REPORT if
-      ORK/QEA blocked; do not weaken).
+- [~] Task 11 — **implemented — pending live QEA verification.** QEA-governed administrative role grant
+      using the EXISTING Tide IGA/QEA mechanism. New server-only IGA client `lib/tide/igaAdmin.ts`
+      (`initiateRoleGrantChangeRequest` + read-only `getChangeRequest`/`listPendingChangeRequests`; NO
+      approve/commit automation — that is the human enclave step) and admin-only route
+      `app/api/admin/private-note-role/route.ts` (`withRole('admin')`). The route hard-restricts the
+      grant target to the allowlist `_tide_privatenote.selfencrypt` / `_tide_privatenote.selfdecrypt`
+      (reject 400/422 otherwise, before any CR), takes the requesting admin from the verified JWT only,
+      and reports the grant as PENDING (not granted) — effective only after the Tide QEA quorum approves
+      + commits via the admin browser enclave. Env/MultiAdmin limitation: TideCloak is NOT running and
+      the realm is MultiAdmin (Tide) mode, so the live change-request→approve→commit flow (and the real
+      threshold value, the requester-self-approval refusal, and role-becomes-effective-post-commit)
+      could NOT be exercised headlessly — those are a MANUAL enclave step and remain to be live-verified.
+      Governance is Tide IGA ONLY — NO application approval/quorum table or QEA state was created. No
+      changes to OwnershipSpike / `tide_ownership_attestation` / marketplace-ownership logic / DPoP /
+      auth config / `data/tidecloak.json` / `lib/db/schema.sql`. Headless validation (54/54 assertions,
+      IGA HTTP stubbed at the igaAdmin boundary): 401 unauth, 403 player, 401 missing cnf.jkt, allowlist
+      rejects arbitrary roles (initiate never called), allowlisted role → initiate called once +
+      `status:'pending'`, body-supplied requester ignored, 202-CR → pending, immediate-apply (200 no CR)
+      and connection-refused → clear 5xx (no pretend success), missing admin credential → fail closed.
+      This demonstrates Tide GOVERNANCE (Layer B / IGA), NOT Layer C cryptographic item ownership.
+      Task 12 is next.
 
 - [ ] Task 12 — Tide-protected private note (self-encryption; `GET/PUT /api/account/private-note`; `app/account`).
 - [ ] Task 13 — player isolation/security checks.
