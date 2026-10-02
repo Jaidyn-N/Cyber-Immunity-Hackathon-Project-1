@@ -13,8 +13,11 @@ auth-only Next.js 16 + TideCloak app. It preserves the three-layer architecture 
   policy). **Not extended in this beta**; storage/verify of already-provable statements only.
 
 The beta delivers Category 1 (core) and Category 2 (Tide security) in full, and explicitly does NOT
-implement Category 3 (Tide-backed transfer / supersession), which is blocked by the Player B / ORK
-issue recorded in `docs/LEARNINGS.md`. The `OwnershipSpike` contract/policy is untouched.
+implement Category 3 (Tide-backed transfer / supersession). Category 3 is NOT blocked on Player B
+anymore (resolved 2026-10-01): Player B can obtain a new Tide ownership attestation and rebinding is
+demonstrated. What remains unresolved is **supersession/revocation** (previous owner losing authority /
+"latest statement wins") — not provided by the current `OwnershipSpike` contract and out of beta scope.
+The `OwnershipSpike` contract/policy is untouched.
 
 Design principle throughout: **the DB ownership record is never presented as cryptographic proof of
 ownership.** Layer A ownership answers "what the application currently shows"; Layer C answers "what the
@@ -33,7 +36,8 @@ The system keeps the three layers from `docs/SYSTEM-ARCHITECTURE.md` strictly se
   `vuid` and enforces roles on every protected API.
 - **Layer C (Tide ownership authority):** the existing `OwnershipSpike` VVK-verifiable statements.
   In this beta, Layer C is storage/verify only (`tide_ownership_attestation` table); it is NOT extended
-  and is NOT moved by the marketplace. Category 3 (transfer/supersession) is blocked.
+  and is NOT moved by the marketplace. Category 3 status (2026-10-01): rebinding / a new attestation for
+  Player B is demonstrated; **supersession/revocation remains unresolved** and is out of beta scope.
 
 Request path: Player Browser → (DPoP `secureFetch`) → Next.js API route (`withAuth`/`withRole`) →
 `lib/db` repositories → SQLite. Identity/crypto side calls go Browser ↔ TideCloak/ORKs. The full
@@ -96,11 +100,11 @@ and supports the security objective (protecting private player information).
   their session cannot `doDecrypt` it (identity-bound to X''s CVK). So isolation holds at two levels:
   server query scoping (Layer B) AND cryptographic binding (Tide).
 - **Testing limitation (marked, not worked around):** fully demonstrating "player Y cannot read X''s
-  data" live requires a second authenticated player, which is **blocked** by the Player B / ORK issue.
+  data" live requires a second authenticated player, which is now available (Player B works as of 2026-10-01).
   The design records this as a testing limitation. What IS demonstrable single-player now: (a) X can
   encrypt and decrypt; (b) the stored value is not plaintext; (c) the server rejects any request whose
   `vuid` does not own the row. The cross-player *decryption refusal* is asserted by construction
-  (self-encryption is identity-bound) and will be live-tested once Player B is unblocked.
+  (self-encryption is identity-bound) and can now be live-tested with the working Player B account.
 
 ### 4. Marketplace eligibility — "cosmetic items obtained from the shop are listable"
 
@@ -202,7 +206,8 @@ tide_ownership_attestation            -- LAYER C (separate on purpose; storage/v
   payload_item      TEXT               -- itemInstanceId used in the signed payload
   created_at        TEXT
   -- This table records Tide-signed statements when available. It is NOT written by the
-  -- marketplace transfer (Category 3 blocked). It never substitutes for a Layer A change,
+  -- marketplace transfer (Category 3: rebinding demonstrated, supersession unresolved; out of beta
+  -- scope). It never substitutes for a Layer A change,
   -- and a Layer A change never writes here.
 ```
 
@@ -286,9 +291,10 @@ this is a *temporary application-level ownership transfer — NOT Tide-backed ow
 `tide_ownership_attestation` row is created or altered by this flow. `OwnershipSpike` is not called.
 Nothing here is described as satisfying Category 3 (Reqs 14–16).
 
-**Future integration seam:** when Player B / ORK is unblocked, a real Tide transfer would additionally
-mint a new VVK-verifiable statement bound to B and record supersession — that work attaches at
-`obtain` but is explicitly out of scope now.
+**Future integration seam:** Player B can now obtain a new VVK-verifiable statement bound to B (rebinding
+demonstrated 2026-10-01). A real Tide-backed transfer would additionally need **supersession** so A's
+prior attestation stops being authoritative — this is the remaining unresolved design question and is
+explicitly out of scope now; it attaches at `obtain`.
 
 ## Demo / User Flow (with implementable-now vs blocked)
 
@@ -301,19 +307,22 @@ mint a new VVK-verifiable statement bound to B and record supersession — that 
 7. Sees equipped item in avatar/customisation (simple representation). — **Now**
 8. Lists an eligible owned item. — **Now**
 9. Another player obtains the listing → **application** ownership changes. — **Now (single-machine,
-   two logins) — but a second *Tide* player is BLOCKED**; the beta demonstrates the app-level transfer
-   and labels it as such. Live two-player Tide test is deferred.
+   two logins).** A second real *Tide* player is now available (Player B works as of 2026-10-01), but the
+   beta marketplace transfer remains a **Layer A** change and is labelled as such — it is NOT a
+   Tide-backed transfer. (Tide-backed transfer additionally needs supersession, which is unresolved.)
 10. Application ownership changes to buyer. — **Now (Layer A)**
 11. Previous owner can no longer equip/use it via the app (server ownership check now fails for A). — **Now (Layer A)**
 12. New owner can see/equip it. — **Now (Layer A)**
 13. Sensitive protected data accessible only via the authorised Tide session (encrypt/decrypt own note;
-    backend shows ciphertext). — **Now (single-player); cross-player refusal live-test BLOCKED**
+    backend shows ciphertext). — **Now (single-player); cross-player refusal now live-testable with the
+    working Player B account**
 14. Admin-only functionality protected by RBAC; role-grant governed by QEA. — **Now (RBAC now;
     QEA relies on existing IGA)**
 
-**Blocked (Category 3, not in this beta):** Player B receiving Tide ownership authority; Tide-backed
-transfer minting a new signed statement to B; supersession/revocation making A''s Tide statement
-non-current.
+**Category 3 (not in this beta) — status 2026-10-01:** Player B receiving a new Tide ownership
+attestation and rebinding are **Demonstrated**; cross-VUID forgery prevention is **Demonstrated**.
+**Still unresolved (not provided by the current contract):** supersession/revocation making the prior
+owner's attestation non-current, and the previous owner losing authority. These remain out of beta scope.
 
 ## Architecture Diagram
 
@@ -425,10 +434,13 @@ Application ownership: Layer A (owner_vuid in SQLite).  Tide ownership authority
   writes a `transfer_kind='application-level-temporary'` record.
 - **Tide security demo:** save a private note (browser encrypts) → read `data/app.db` and show the
   column is ciphertext, not plaintext → decrypt in-session to show plaintext returns. Player-Y refusal
-  is asserted by construction and marked BLOCKED for live test.
+  is asserted by construction; a live cross-player test is now possible with the working Player B account.
 - **RBAC:** non-admin blocked from `/api/admin/*` (403) server-side.
 - **Preservation:** login → dashboard, DPoP relay, `/auth/redirect` still work.
 - Verify with `npm run typecheck` and `npm run build`.
+
+
+
 
 
 

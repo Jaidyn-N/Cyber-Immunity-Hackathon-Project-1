@@ -22,21 +22,44 @@ React 19) + TideCloak app. Two parallel threads:
 - `docs/SYSTEM-ARCHITECTURE.md` — the three-layer model (A: app/DB, B: TideCloak auth, C: Tide ownership).
 - `docs/DEVELOPMENT-BACKLOG.md` — task backlog / critical path.
 - `.kiro/specs/marketplace-beta/requirements.md` — 17 requirements in 3 categories (Core beta / Tide
-  security / blocked Tide ownership).
+  security / Tide ownership — rebinding demonstrated, supersession unresolved).
 - `.kiro/specs/marketplace-beta/design.md` — the beta design (DB=SQLite/better-sqlite3, self-encrypted
   privateNote, marketplace eligibility, QEA scenario, data model, security boundaries).
 - `.kiro/specs/marketplace-beta/tasks.md` — the 19-task plan (waves). THIS is the checklist being executed.
 
 ## Tide PoC — status (do NOT redo or modify)
 
-- [Confirmed] Tide ownership signing works: an authenticated `vuid` is bound to an item via the existing
-  `OwnershipSpike` Forseti policy; the ORKs threshold-sign a statement that verifies against the realm VVK.
-- [Confirmed] Deny path: an unauthorised VUID cannot sign for another VUID — all 20 ORKs reject at PreSign.
+Player B is NO LONGER blocked — the two-player investigation completed 2026-10-01 (details:
+`docs/LEARNINGS.md` → "Player B ownership attestation / supersession investigation (2026-10-01)").
+Capability status (no ranking/verdict — each line independent):
+
+- [Confirmed] Bind item to owner''s VUID: Tide ownership signing works — an authenticated `vuid` is
+  bound to an item via the existing `OwnershipSpike` policy; the ORKs threshold-sign a statement that
+  verifies against the realm VVK.
+- [Confirmed] Prevent another VUID minting an attestation for that owner: all 20 ORKs reject at PreSign.
+  Demonstrated in BOTH directions (A→other and B→A).
+- [Confirmed] Independent VVK verification of an attestation.
+- [Confirmed] **Player B receives a new Tide ownership attestation.** A genuine second Tide-authenticated
+  account (vuid `c0f0c8d6…37bb9`) signed `spike-item-0001 → B`; 64-byte threshold signature; VVK verify = true.
+- [Confirmed] **Ownership rebinding via a new attestation** — the same item can receive a new attestation
+  bound to Player B when B is the authenticated executor. (This is rebinding / a new attestation, NOT
+  complete exclusive ownership transfer.)
+- [Unproven / not provided by current contract] Previous owner''s attestation automatically invalidated;
+  supersession/revocation; exclusive "latest ownership statement wins". After B signed, A''s original
+  attestation STILL independently verifies against the VVK — the contract checks only
+  `boundOwnerVuid == DokenDto.UserId` and holds no current-owner/version/nonce/revocation state.
+- [Unproven] Full exclusive Tide-backed transfer (new owner gains authority AND previous owner loses it).
 - [Confirmed] `contractId` = `72567527A84CA9F4…`; a signed policy is persisted at
   `test-artifacts-temp/OwnershipSpike.signed-policy.bin` (KEEP this file; gitignored).
-- [Blocked] Second player (Player B) enrolment fails on an upstream ORK Fabric outage
-  (`TidecloakSessionStartTokenSign` 500s). So Tide-backed TRANSFER and SUPERSESSION are unproven/blocked.
-- [Constraint] `OwnershipSpike` provides owner-bound signing but NOT revocation/supersession by design.
+- [Constraint] `OwnershipSpike` provides executor-to-bound-owner matching only — no revocation/supersession by design.
+
+### Next unresolved Tide ownership question (NOT being implemented yet)
+
+> **How should supersession/revocation be implemented so that a new ownership attestation makes the
+> previous owner''s authority unusable?** (e.g. application-side "current owner" state treating only the
+> latest VVK-signed attestation as authoritative, and/or a different contract with explicit
+> versioning/revocation.) This is design-only for now — do NOT implement it as part of the beta.
+
 - **RULES:** do NOT modify `OwnershipSpike` / Tide policies / TideCloak config / DPoP; do NOT fake
   Player B; do NOT represent the beta''s DB (Layer A) transfer as Tide-backed (Layer C).
 
@@ -57,14 +80,11 @@ DONE and approved:
       capacity 4, seeded deterministic selection), `GET /api/shop`, + `materialiseRotation`/
       `hasOffersForWindow` in `shop.ts`.
 
-NEXT — start here in the new session:
-- [ ] **Task 8 — Purchasing and purchase records.** `POST /api/shop/purchase`: in ONE DB transaction,
-      validate the offer is active/in-window (`isOfferPurchasable`) and the player has funds
-      (`debitBalance` guard), then `items.createInstance(owner=caller, acquired_via='shop')` and
-      `shop.recordPurchase(...)`. Reject unavailable item / insufficient funds (rollback, no state change).
-      Requirements 5.4, 6.1-6.5, 8.2.
+- [x] Task 8 — Purchasing + purchase records: `POST /api/shop/purchase` (atomic `purchaseOffer` in
+      `lib/db/shop.ts`): validate active/in-window offer + funds (`debitBalance`), `createInstance`
+      (owner=caller, acquired_via=''shop''), `recordPurchase` — all in one transaction (rollback on failure).
 
-REMAINING after Task 8:
+NEXT — start here in the new session:
 - [ ] Task 9 — marketplace listings (`/api/marketplace/list`, `/api/marketplace`).
 - [ ] Task 10 — temporary Layer A marketplace transfer + transaction records (`/api/marketplace/obtain`).
 - [ ] Task 11 — QEA-governed `_tide_privatenote.*` voucher-gate role grant (GATE; STOP-AND-REPORT if
@@ -111,3 +131,5 @@ REMAINING after Task 8:
 3. Confirm `data/tidecloak.json`, `test-artifacts-temp/OwnershipSpike.signed-policy.bin`, and `docs/*`
    came across intact.
 4. Read `docs/LEARNINGS.md` + `.kiro/specs/marketplace-beta/tasks.md`, then resume at Task 8.
+
+

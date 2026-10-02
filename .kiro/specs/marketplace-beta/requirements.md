@@ -1,4 +1,4 @@
-﻿# Requirements Document
+# Requirements Document
 
 ## Introduction
 
@@ -9,7 +9,7 @@ defined requirement; where a requirement cannot be implemented yet, it is retain
 
 Source-of-truth documents: `docs/SYSTEM-ARCHITECTURE.md` (three-layer architecture — A: app/DB,
 B: TideCloak auth, C: Tide ownership authority), `docs/DEVELOPMENT-BACKLOG.md`, `docs/LEARNINGS.md`
-(confirmed Tide ownership-signing and deny-path results; current Player B / transfer blocker), and the
+(confirmed Tide ownership-signing, deny-path, and the 2026-10-01 Player B rebinding results; supersession remains unresolved), and the
 existing gaming-marketplace PoC user stories and success criteria.
 
 Requirements are grouped into three clearly separated categories, indicated in each requirement title
@@ -17,9 +17,9 @@ and via a **Category** and **Status** line:
 
 - **Category 1 — Core Beta Functionality (Implementing Now)** — Layer A + Layer B identity.
 - **Category 2 — Tide Security Functionality (In Scope)** — Layer B + Tide-protected sensitive data.
-- **Category 3 — Tide Ownership Authority (Blocked / Unproven)** — Layer C transfer/supersession.
+- **Category 3 — Tide Ownership Authority (rebinding Demonstrated; supersession Unresolved)** — Layer C transfer/supersession.
 
-**Status legend:** `[Implementing now]`, `[In scope — Tide security]`, `[Blocked]`.
+**Status legend:** `[Implementing now]`, `[In scope — Tide security]`, `[Demonstrated]` (Tide capability shown to work), `[Unresolved]` (tested or analysed, not provided by the current contract), `[Blocked]` (cannot be exercised yet).
 
 ### Confirmed Tide status carried in from `docs/LEARNINGS.md` (do not regress)
 
@@ -27,8 +27,11 @@ and via a **Category** and **Status** line:
   the ORKs produce a threshold-signed statement verifiable against the realm VVK (TEST 1 / spike).
 - [Confirmed] An unauthorised VUID cannot sign for another VUID — all 20 ORKs reject at PreSign (deny-path).
 - [Confirmed] TideCloak login → dashboard works; DPoP strict/ES256 is live; `vuid` present in token.
-- [Blocked] Second-player (Player B) enrolment is blocked by an upstream ORK Fabric outage
-  (`TidecloakSessionStartTokenSign` 500s); Tide-backed transfer/supersession cannot be exercised yet.
+- [Confirmed 2026-10-01] Second-player (Player B) enrolment now works (the earlier ORK
+  `TidecloakSessionStartTokenSign` outage has cleared). Player B obtained a VVK-verified ownership
+  attestation and rebinding is demonstrated; cross-VUID forgery is rejected in both directions.
+  **Supersession/revocation remains UNRESOLVED** — not provided by the current `OwnershipSpike` contract
+  (A's prior attestation still verifies after B's). Full exclusive Tide-backed transfer is still unproven.
 - [Constraint] The `OwnershipSpike` contract/policy MUST remain untouched. It provides owner-bound
   signing authority but NOT revocation/supersession by design.
 
@@ -211,7 +214,7 @@ players cannot access it.
 #### Acceptance Criteria
 1. WHEN player X''s protected field is requested by player X''s authorised Tide session THEN the system SHALL allow decryption/access.
 2. WHEN player Y attempts to read player X''s protected private information THEN the system SHALL prevent access, because self-encryption is identity-bound and another player''s session cannot decrypt.
-3. WHEN player isolation is validated THEN the system SHALL make it demonstrable that X can read and Y cannot; the full two-player demonstration depends on Player B availability (see Requirement 16).
+3. WHEN player isolation is validated THEN the system SHALL make it demonstrable that X can read and Y cannot; a live two-player demonstration is now possible (Player B available as of 2026-10-01), though the beta need not depend on it (self-encryption is identity-bound by construction).
 
 ### Requirement 13: Tide / QEA governance for sensitive admin changes
 
@@ -227,17 +230,17 @@ by Tide governance, so that no single admin can make them unilaterally.
 
 ### Requirement 14: Player B receives Tide-backed ownership authority
 
-**Category:** 3 — Tide Ownership Authority. **Status:** [Blocked]
+**Category:** 3 — Tide Ownership Authority. **Status:** [Demonstrated 2026-10-01]
 
 **User Story:** As a second player (B), I want to obtain Tide-backed ownership authority for an item, so
 that ownership is cryptographically bound to me.
 
 #### Acceptance Criteria
-1. WHEN Player B is enrolled with a Tide-linked `vuid` THEN B SHALL be able to obtain a VVK-verifiable ownership statement for an item bound to B. **[Blocked — Player B enrolment fails: ORK `TidecloakSessionStartTokenSign` 500s. MUST NOT be faked.]**
+1. WHEN Player B is enrolled with a Tide-linked `vuid` THEN B SHALL be able to obtain a VVK-verifiable ownership statement for an item bound to B. **[Demonstrated 2026-10-01 — a genuine Player B account signed `spike-item-0001 → B`; 64-byte threshold signature; VVK verify = true.]**
 
 ### Requirement 15: Tide-backed ownership transfer
 
-**Category:** 3 — Tide Ownership Authority. **Status:** [Blocked]
+**Category:** 3 — Tide Ownership Authority. **Status:** [Partially demonstrated — rebinding yes; exclusive transfer Unproven]
 
 **User Story:** As a player, I want ownership to transfer to another player through Tide, so that the new
 owner holds cryptographic authority.
@@ -247,13 +250,13 @@ owner holds cryptographic authority.
 
 ### Requirement 16: Supersession / revocation of previous owner authority
 
-**Category:** 3 — Tide Ownership Authority. **Status:** [Blocked]
+**Category:** 3 — Tide Ownership Authority. **Status:** [Unresolved — tested 2026-10-01, NOT provided by current contract]
 
 **User Story:** As the system, I want a previous owner''s Tide authority to become non-current after
 transfer, so that "latest ownership statement wins".
 
 #### Acceptance Criteria
-1. WHEN ownership transfers to B THEN A''s previous Tide ownership authority SHALL no longer be exercisable. **[Blocked AND design-limited — the existing `OwnershipSpike` contract signs standalone statements with no version/nonce/revocation, so A''s prior signature stays cryptographically valid. Supersession would require app-side current-owner state and/or a sequence-aware contract, deliberately NOT built now.]**
+1. WHEN ownership transfers to B THEN the previous owner's Tide ownership authority SHALL no longer be exercisable. **[Unresolved — TESTED 2026-10-01 and NOT provided: after B received a new attestation, A's original attestation STILL independently verifies against the VVK. The `OwnershipSpike` contract checks only `boundOwnerVuid == DokenDto.UserId` with no current-owner/version/nonce/revocation state and cannot retract an issued signature. Achieving it needs app-side current-owner state and/or a version/revocation-aware contract — deliberately NOT built.]**
 
 ### Requirement 17: Category 3 boundary and non-fabrication guard
 
@@ -280,4 +283,4 @@ Layer A change is mistaken for Tide-backed transfer.
 
 Login → View available limited items → Purchase an item with simulated currency → Item appears in
 inventory → Equip the item → List an eligible owned item on the marketplace → View marketplace listing.
-A second-player marketplace transaction MAY remain incomplete (Category 3 blocked) and MUST NOT be faked.
+A second-player marketplace transaction MAY remain incomplete: Category 3 rebinding is demonstrated, but exclusive Tide-backed transfer/supersession is unresolved. The beta marketplace transfer is Layer A only and MUST NOT be described as Tide-backed or faked.

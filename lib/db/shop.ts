@@ -2,6 +2,8 @@
 import { getDb, nowIso } from "./index";
 import type { ShopOfferRow, PurchaseRecordRow, ItemTemplateRow } from "./types";
 import { randomUUID } from "node:crypto";
+import { debitBalance, InsufficientFundsError } from "./players";
+import { createInstance } from "./items";
 
 /** Active offers whose window currently contains `at` (ISO string). Joined to template for display. */
 export function listActiveOffers(at: string = nowIso()): Array<ShopOfferRow & { template: ItemTemplateRow }> {
@@ -114,3 +116,64 @@ export function materialiseRotation(
   tx();
 }
 
+
+
+/** Categorised, non-leaky reasons a purchase can fail (mapped to HTTP status by the route). */
+export type PurchaseFailure =
+  | { ok: false; reason: "offer_not_found" }
+  | { ok: false; reason: "offer_unavailable" }
+  | { ok: false; reason: "insufficient_funds" };
+
+export interface PurchaseSuccess {
+  ok: true;
+  instanceId: string;
+  purchaseId: string;
+  price: number;
+  newBalance: number;
+  templateId: string;
+}
+
+/**
+ * Atomically purchase a shop offer for the SERVER-VERIFIED buyer vuid. All steps succeed or fail
+ * together in a single better-sqlite3 transaction:
+ *   1. resolve the offer server-side (offer_not_found if absent),
+ *   2. verify it is active AND within its window at `nowIsoStr` (offer_unavailable otherwise),
+ *   3. debit the AUTHORITATIVE offer price (guarded; insufficient_funds if short — no state change),
+ *   4. create an item_instance owned by buyerVuid (acquired_via='shop'),
+ *   5. write a purchase_record.
+ * The client controls NONE of: price, owner, acquisition method — all derived here. On any failure
+ * the transaction rolls back, leaving currency/inventory/records unchanged.
+ */
+export function purchaseOffer(
+  buyerVuid: string,
+  offerId: string,
+  nowIsoStr: string = nowIso()
+): PurchaseSuccess | PurchaseFailure {
+  const db = getDb();
+  const tx = db.transaction((): PurchaseSuccess | PurchaseFailure => {
+    const offer = getOffer(offerId);
+    if (!offer) return { ok: false, reason: "offer_not_found" };
+
+    // Authoritative purchasability + price come from the DB, not the client.
+    if (offer.active !== 1 || !(offer.window_start <= nowIsoStr && offer.window_end > nowIsoStr)) {
+      return { ok: false, reason: "offer_unavailable" };
+    }
+    const price = offer.price;
+
+    // Guarded debit: throws InsufficientFundsError (caught below) BEFORE any item is created.
+    let newBalance: number;
+    try {
+      newBalance = debitBalance(buyerVuid, price);
+    } catch (e) {
+      if (e instanceof InsufficientFundsError) return { ok: false, reason: "insufficient_funds" };
+      throw e; // unexpected -> abort the transaction (rollback)
+    }
+
+    const instanceId = createInstance(offer.template_id, buyerVuid, "shop");
+    const purchaseId = recordPurchase(buyerVuid, offer.template_id, instanceId, price);
+
+    return { ok: true, instanceId, purchaseId, price, newBalance, templateId: offer.template_id };
+  });
+
+  return tx();
+}

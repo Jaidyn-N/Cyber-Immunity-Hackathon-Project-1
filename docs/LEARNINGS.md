@@ -1,4 +1,4 @@
-﻿# Project Learnings
+# Project Learnings
 
 Living document. Records verified technical discoveries, open investigations, assumptions, and
 constraints for the Tide-protected gaming marketplace PoC.
@@ -125,6 +125,11 @@ constraints for the Tide-protected gaming marketplace PoC.
   enforced by the ORKs (in-contract) or by the app (accept only the latest VVK-signed attestation per
   item, treat superseded proofs as non-authoritative) must be decided and validated. Leaning
   app-enforced supersession, because the ORKs sign statements; they do not maintain per-item state.
+
+  > **Update (2026-10-01):** this open question was investigated end-to-end with a real Player B.
+  > Outcome: rebinding / a new attestation for a second owner is **Demonstrated**, but the current
+  > OwnershipSpike contract provides **no supersession/revocation** — A''s prior attestation still
+  > verifies after B''s. See `# Player B ownership attestation / supersession investigation (2026-10-01)` below. Supersession remains the open design item; not implemented.
 
 ---
 
@@ -610,6 +615,9 @@ no new enclave approval. Isolated temp test code under app/tide-transfer-temp + 
   independently verified. Signature (hex): b619c3e4…ede000d. Saved as role A.
 
 ## TEST 2 & 3 — transfer to Player B — [Blocked]
+> **Superseded (2026-10-01):** this [Blocked] status was accurate on 2026-09-07 (ORK outage).
+> Player B now works — see `# Player B ownership attestation / supersession investigation (2026-10-01)`.
+> This block is retained as a point-in-time record; do not read it as the current status.
 - Blocked BEFORE the test could run: creating/authenticating **Player B** fails at account creation
   with client error "Error creating user account. Network request failed".
 - **Root cause (infrastructure, NOT our code/policy):** the shared Tide ORK Fabric
@@ -898,3 +906,119 @@ provides owner-bound signing authority but NOT supersession/revocation. Those fi
 - Layer A / Layer C separation preserved (shop touches only Layer A `shop_offer`/`item_template`;
   no Tide attestation). Category 3 (Tide-backed transfer/supersession), the Player B flow, and the ORK
   blocker remain blocked and untouched.
+
+## Task 8 — shop purchasing and purchase records (2026-09-07)
+
+- [Confirmed] Implemented `POST /api/shop/purchase` (`app/api/shop/purchase/route.ts`) and an atomic
+  `purchaseOffer(buyerVuid, offerId)` in `lib/db/shop.ts` (the smallest repo extension; raw SQL stays
+  in `lib/db/`, no new tables/fields).
+- [Confirmed] Purchase transaction flow (all in ONE `better-sqlite3` `db.transaction`, all-or-nothing):
+  1) resolve the offer server-side (404 if absent); 2) verify active AND within window at `now`
+  (409 `offer_unavailable` otherwise); 3) guarded `debitBalance` of the authoritative price (402
+  `insufficient_funds` if short, thrown BEFORE any item is created); 4) `createInstance`
+  (owner = verified vuid, `acquired_via='shop'`); 5) `recordPurchase`.
+- [Confirmed] Authoritative price = `shop_offer.price` resolved server-side; the client-supplied
+  `price` is ignored. Buyer identity = verified Tide JWT `vuid` only (via `withAuth` +
+  `getOrCreateCurrentPlayer`); body-supplied `vuid`/`owner_vuid`/`acquired_via` are ignored.
+- [Confirmed] Atomicity enforced by the single transaction: a validation (unit-style) test injected a
+  failure at the `purchase_record` insert and confirmed the currency debit, the item instance, AND the
+  purchase record were ALL rolled back (no partial state). Insufficient funds leaves balance unchanged.
+- [Confirmed] Purchase-record behaviour: on success a `purchase_record` row (buyer, template, instance,
+  price, timestamp) is written; the purchased instance appears in the buyer''s `/api/inventory`.
+- [Confirmed] Ownership persists after the item leaves the shop: deactivating/expiring the offer does
+  not change `item_instance.owner_vuid` (tested).
+- [Confirmed] An off-rotation/expired offer cannot be purchased even if its id is known (409, no charge).
+  Offers are not single-use in this beta: a well-funded buyer can buy the same active offer repeatedly,
+  yielding distinct instances with a consistent balance (replay test).
+- [Confirmed] Error handling (no DB details leaked): 401 unauth/invalid/missing-`cnf.jkt`; 400 invalid
+  body; 404 nonexistent offer; 409 offer unavailable/expired; 402 insufficient funds.
+- [Confirmed] Validation (throwaway Node script; fixture Ed25519 key; temp DB; removed after): 14/14
+  passed, covering all 18 required cases (some combined). Two initial failures were TEST-HARNESS bugs,
+  not implementation bugs — (a) ESM module bindings cannot be redefined, so the atomicity injection was
+  switched to spying on the DB connection''s `prepare()`; (b) a replay-test balance bookkeeping error was
+  fixed with a fresh well-funded buyer. After fixing the tests: 14/14.
+- [Confirmed] `npm run typecheck` passes; `next build --webpack` passes and lists `/api/shop/purchase`.
+- [Confirmed] **OneDrive build issue resolved:** after `attrib +U +P` on the project folder (pin
+  always-local), `next build` completed cleanly on the FIRST attempt with NO `.next` pre-clear and NO
+  `EPERM: unlink '.next\...'` error. The earlier Task-7 EPERM flakiness appears fixed by the always-local
+  pinning; the `.next`-clear workaround is no longer needed here.
+- Layer A / Layer C separation preserved: the purchase writes only Layer A (`item_instance`,
+  `purchase_record`, `player.currency_balance`); it does NOT write `tide_ownership_attestation`, does
+  NOT call `OwnershipSpike`, and is NOT a Tide-backed ownership transfer.
+- [Investigation] Live-token acceptance remains deferred (fixture-signed tokens); observed at frontend
+  integration (Task 15/16).
+- Category 3 (Tide-backed transfer/supersession), the Player B flow, and the ORK blocker remain blocked
+  and untouched.
+
+---
+
+# Player B ownership attestation / supersession investigation (2026-10-01)
+
+The previously-blocked second-player (Player B) Tide experiment now works: Player B is a genuine,
+separately Tide-authenticated account. Ran the two-real-session PoC with the EXISTING `OwnershipSpike`
+contract + persisted signed policy (`test-artifacts-temp/OwnershipSpike.signed-policy.bin`). NO
+contract/policy/realm/DPoP change; ownership signing is IMPLICIT (no enclave approval). All signature
+verification done in-browser against the realm VVK (Ed25519) via WebCrypto.
+
+VUIDs used (test identities, local PoC):
+- Player A vuid: `88eae7dad1eee3e681ac8c009d65aad2b3d51f8745e8ca6c8a54f46f500bf5f0`
+- Player B vuid: `c0f0c8d6dc7cfec8fca96922ec538e5388d689de33d5c06a16b3a90282a37bb9`
+- Item: `spike-item-0001`
+
+## Results
+
+- [Confirmed] **TEST 1 — Player A ownership reconfirmed.** A''s session signed `spike-item-0001 -> A`;
+  signature `b3bd6e0f…c49708`; VVK verify = true.
+- [Confirmed] **TEST 2 — Player B received a Tide-backed ownership attestation.** B''s REAL session
+  signed `spike-item-0001 -> B`; the ORKs accepted and produced a 64-byte threshold signature
+  `6a177a82…834f03`; VVK verify = true. The signed statement contains the expected item id and B''s vuid.
+  This is the first time the Player B half has been demonstrated (previously blocked by the ORK outage).
+- [Confirmed] **TEST 3 — a player cannot mint an attestation naming someone else.** Player B''s session
+  attempted `spike-item-0001 -> A`; ALL 20/20 ORKs rejected at PreSign with the contract''s own message
+  *"Forseti policy denied (Data, Executor): Executor vuid does not match the bound owner vuid"*; no
+  signature produced (`rejected_by_ork: true`). (This is the B->A direction; the earlier deny-path test
+  proved the A->other direction. Both directions now confirmed.)
+- [Confirmed] **TEST 4 — both attestations remain independently valid.** Verifying A''s original
+  signature AND B''s new signature against the realm VVK: both `verifies: true`
+  (`both_independently_valid: true`). B receiving a new attestation did NOT invalidate A''s earlier one.
+
+## TEST 5 — what the current OwnershipSpike mechanism provides (separate findings)
+
+- **Ownership binding: demonstrated** [Confirmed] — the ORKs threshold-sign a statement binding an item
+  to a vuid, verifiable against the VVK.
+- **Prevention of forging an attestation for another vuid: demonstrated** [Confirmed] — executor vuid
+  must equal the bound owner vuid; 20/20 ORKs reject otherwise (both directions).
+- **Transfer / rebinding via a NEW attestation: demonstrated** [Confirmed] — Player B obtained a valid
+  new attestation for the same item bound to B. (B must sign it himself; no one can mint it for him.)
+- **Supersession / revocation of the previous owner''s attestation: NOT provided** [Confirmed] — A''s
+  original `spike-item-0001 -> A` signature is still cryptographically valid after B''s new statement
+  exists. The contract checks only `boundOwnerVuid == DokenDto.UserId`; it holds no version/nonce/
+  current-owner state and cannot retract an already-issued signature. "Latest statement wins" is NOT a
+  property of the current contract.
+
+## Classification (per the brief)
+
+- **new/rebound ownership attestation: DEMONSTRATED**
+- **supersession/revocation: NOT provided by the current contract**
+
+Full Tide-backed transfer semantics (new owner gains authority AND previous owner loses it) are
+therefore **NOT** demonstrated by `OwnershipSpike` alone. Achieving them would require application-side
+"current owner" state (treat only the latest VVK-signed attestation as authoritative) and/or a
+different, sequence/nonce-aware contract with explicit revocation — a governed change deliberately NOT
+made here.
+
+## Remaining limitations / notes
+
+- Signing is browser-only (interactive session per player) — unchanged constraint.
+- The beta marketplace transfer (Task 10, not yet built) is a Layer A/DB change only and must NOT be
+  described as satisfying this Tide-backed transfer; supersession specifically remains unprovided at the
+  Tide layer.
+- No `OwnershipSpike`/policy/realm/DPoP changes were made; Player B was a real Tide account, not faked;
+  VUIDs were not altered; no Layer A/marketplace code was touched by this investigation.
+- Infra note: the earlier ORK `TidecloakSessionStartTokenSign` outage that blocked Player B has cleared;
+  both A and B authenticated and signed against the live 20-ORK network.
+- Validation-tooling note: raw Node cannot load `@tidecloak/js` (transitive `heimdall-tide` extensionless
+  ESM imports fail outside the bundler), so VVK verification was done in the browser page. A first
+  verify-both attempt failed with `JWK member "kty" missing` because the client `getConfig()` jwk shape
+  differed; fixed by serving the raw embedded VVK jwk from `data/tidecloak.json` via the temp route and
+  importing that. Not an implementation issue with the attestations.

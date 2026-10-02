@@ -50,13 +50,28 @@ wider Tide security functionality. The PoC keeps them in three layers:
   tokens, the `vuid` identity claim, server-side JWT verification, and RBAC. This answers *who is
   making the request*. [Confirmed] wiring exists for login/DPoP/callback; server-side verification is
   proposed.
-- **Layer C — Wider Tide security (ownership authority).** [Investigation] Threshold-signed ownership
-  attestations produced by a Forseti contract that binds an item instance to an owner `vuid`, verified
-  against the realm VVK, cross-checked against the DB on read, and superseded on transfer. This is what
-  makes a tampered `owner` row insufficient to steal or exercise ownership.
+- **Layer C — Wider Tide security (ownership authority).** Threshold-signed ownership attestations
+  produced by the existing `OwnershipSpike` Forseti contract that binds an item instance to an owner
+  `vuid`, verified against the realm VVK. **Confirmed (2026-10-01):** both Player A and Player B can each
+  obtain a valid attestation for the *same* item when they are the authenticated executor; the ORKs
+  reject any attempt to mint an attestation for a different `vuid` (both directions). The current
+  contract provides **executor-to-bound-owner matching only** — it maintains NO current-owner, version,
+  nonce, or revocation state. Consequence: **multiple independently valid attestations can exist for the
+  same item at once** (A''s and B''s both verify). So Layer C currently provides ownership *binding* and
+  *rebinding*, but NOT supersession/revocation — see the limitation note below. Layer C remains strictly
+  separate from Layer A (`item_instance.owner_vuid`): a Layer A marketplace transfer is NOT a Tide-backed
+  transfer and never writes `tide_ownership_attestation`.
 
 The PoC''s thesis is that **Layer C authority sits on top of Layer A data**, so Layer A tampering alone
 cannot grant the ability to *exercise* ownership.
+
+> **Current Layer C limitation (confirmed 2026-10-01).** The `OwnershipSpike` contract has no
+> current-owner/version/revocation state, so issuing Player B a new attestation does NOT invalidate
+> Player A''s earlier one — both continue to verify independently against the VVK. Full exclusive
+> Tide-backed transfer (new owner gains authority AND previous owner loses it), supersession/revocation,
+> and "latest ownership statement wins" are therefore **not provided by the current contract** and
+> remain an open design question (application-side current-owner state and/or a version/revocation-aware
+> contract). Not being implemented in the beta.
 
 ---
 
@@ -170,3 +185,4 @@ To avoid adding unverified or unnecessary components:
 
 - `docs/LEARNINGS.md` — the discoveries this architecture is based on.
 - `docs/DEVELOPMENT-BACKLOG.md` — the work required to build and prove this architecture.
+

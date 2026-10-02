@@ -55,6 +55,35 @@ ownership/authority transfers -> A can no longer exercise ownership -> B can exe
 
 ---
 
+---
+
+## Tide ownership investigation status (updated 2026-10-01)
+
+The Player B / ORK blocker that previously gated TIDE-6/7/8 is **resolved for the Player-B half**.
+The two-player investigation (details in `docs/LEARNINGS.md` → "Player B ownership attestation /
+supersession investigation (2026-10-01)") splits those items into completed vs still-unresolved:
+
+**Completed investigation (Confirmed):**
+- Player B Tide authentication (genuine second Tide-linked account, real separate `vuid`).
+- Player B receiving a new Tide-backed ownership attestation (threshold-signed, VVK-verified).
+- Ownership rebinding via a new attestation (same item, bound to B, B as executor).
+- Cross-VUID forgery prevention — ORKs reject minting an attestation for another `vuid` (both directions).
+- Independent VVK verification of attestations.
+
+**Remaining investigation / design (Unproven / not provided by current contract):**
+- Supersession / revocation of a previously issued attestation (TIDE-6 partial, TIDE-7).
+- Previous owner losing Tide-backed authority after transfer (TIDE-7).
+- Exclusive "current owner" / "latest ownership statement wins" semantics.
+- How application-side current-owner state and Tide (Layer C) authority should interact.
+- **Open question:** how should supersession/revocation be implemented so a new attestation makes the
+  previous owner''s authority unusable? (app-side current-owner pointer and/or a version/revocation-aware
+  contract.) **Design-only for now — no new contract task is being added here.**
+
+Note: TIDE-6/7/8 in the table below are therefore **partially** addressed — the rebinding/new-attestation
+and new-owner-can-sign parts are demonstrated; the "previous owner loses authority" / supersession parts
+remain unresolved. The beta''s marketplace transfer (SHOP/MKT, Task 10) is a separate Layer A change and
+is NOT a Tide-backed transfer.
+
 ## Critical path (dependency order)
 
 The order below follows the requested critical path, adjusted where the technical investigation found a
@@ -108,3 +137,4 @@ better dependency order (changes explained after).
 
 - `docs/LEARNINGS.md` — what was discovered.
 - `docs/SYSTEM-ARCHITECTURE.md` — what the proposed system looks like.
+

@@ -1,4 +1,4 @@
-﻿# Implementation Plan — Marketplace Beta
+# Implementation Plan — Marketplace Beta
 
 Ordered, dependency-aware tasks derived from `requirements.md` and `design.md`. Categories 1 and 2 are
 implemented; Category 3 (Tide-backed transfer/supersession) is NOT implemented. The existing
@@ -125,7 +125,7 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
 
 - [ ] 13. Player isolation / security checks
   - [ ] 13.1 Confirm every player-scoped API filters by JWT `vuid`; add explicit tests that player X cannot read player Y''s inventory or private note via the API.
-  - [ ] 13.2 Record the cross-player *decryption refusal* as asserted-by-construction (self-encryption identity-bound) and mark the live two-player test BLOCKED (Player B / ORK) — no workaround.
+  - [ ] 13.2 Record the cross-player *decryption refusal* as asserted-by-construction (self-encryption identity-bound). A live two-player test is now possible (Player B available as of 2026-10-01), but the guarantee holds by construction regardless — no workaround needed.
   - _Requirements: 12.1, 12.2, 12.3_
 
 ## Stage H — Admin / RBAC
@@ -146,7 +146,7 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
 
 - [ ] 16. Complete beta user flow (integration)
   - [ ] 16.1 Wire and manually verify: login → profile/currency/inventory → shop → purchase → inventory → equip → avatar shows equipped → list eligible item → (second login) obtain listing → Layer A ownership changes → previous owner loses app access → new owner gains it → private note encrypt/decrypt.
-  - [ ] 16.2 Note in the flow which steps are app-level-now vs Tide-blocked (second *Tide* player, Tide transfer, supersession).
+  - [ ] 16.2 Note in the flow which steps are app-level (Layer A) vs Tide ownership (Layer C). Player B / rebinding is demonstrated (2026-10-01); exclusive Tide-backed transfer + supersession remain UNRESOLVED and out of beta scope.
   - _Requirements: Success Condition; 1-13, 17_
   - _Checkpoint: `npm run typecheck`; `npm run build`._
 
@@ -158,7 +158,7 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
   - _Requirements: 1.4, 4.4, 6.2, 6.3, 7.2, 7.5, 9.3, 12.1, 12.2, 13, 17_
 
 - [ ] 18. Documentation and cleanup
-  - [ ] 18.1 Update `docs/LEARNINGS.md`: [Confirmed] implemented features and decisions; [Constraint] Category 3 still blocked; any errors + fixes.
+  - [ ] 18.1 Update `docs/LEARNINGS.md`: [Confirmed] implemented features and decisions; [Constraint] Category 3 — rebinding demonstrated (2026-10-01), supersession unresolved, still out of beta scope; any errors + fixes.
   - [ ] 18.2 Update `docs/DEVELOPMENT-BACKLOG.md`: mark SHOP-1/INV-1/MKT-1 (and DATA-1/AUTH-1/AUTH-2 as applicable) progressed; note temporary-transfer status.
   - [ ] 18.3 Confirm temp test app files removed; `test-artifacts-temp/` retained; no OwnershipSpike change; DPoP/auth intact.
   - _Requirements: documentation; 17 (guards)_
@@ -202,15 +202,17 @@ Dependency notes:
   blocker, STOP task 12 and report — do not add a plaintext fallback or otherwise weaken Requirement 11.
 - **Preserve existing Tide:** do not remove DPoP, do not replace TideCloak auth, do not weaken
   server-side ownership checks, do not modify `OwnershipSpike`.
-- **Blocked (Category 3):** second Tide player, Tide-backed transfer, and supersession remain blocked
-  by the Player B / ORK issue and are intentionally excluded from every task above.
+- **Category 3 status:** second Tide player (Player B) and ownership rebinding are **demonstrated**
+  (2026-10-01); **exclusive Tide-backed transfer and supersession/revocation remain UNRESOLVED** (not
+  provided by the current `OwnershipSpike` contract). All of Category 3 is intentionally excluded from
+  every task above regardless — this beta implements only Layer A/B.
 
-## Explicitly NOT in this plan (Category 3 — blocked / forbidden)
+## Explicitly NOT in this plan (Category 3 — excluded from the beta / forbidden)
 
 - No second Forseti ownership contract; no modification to `OwnershipSpike`.
 - No Tide-backed transfer; no minting a new signed statement to a buyer.
 - No supersession/revocation / latest-valid-attestation logic.
-- No faking Player B; no representing the Layer A transfer as Tide-backed.
+- No representing the Layer A transfer as Tide-backed (Player B is real now, but the beta transfer is still Layer A only).
 - No removal of DPoP; no replacement of TideCloak auth; no weakening of server-side ownership checks.
 
 
