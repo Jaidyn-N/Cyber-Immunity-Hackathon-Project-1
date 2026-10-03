@@ -110,10 +110,10 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
 
 ## Stage G — Tide-protected private data (Category 2)
 
-- [ ] 11. QEA-governed voucher-gate role grant (governance demonstration) — GATE for task 12
-  - [ ] 11.1 Ensure the current player holds `_tide_privatenote.selfencrypt` / `_tide_privatenote.selfdecrypt`. If absent, grant via the existing TideCloak IGA/QEA process (change request → approve/commit). Do NOT bypass or fake governance.
-  - [ ] 11.2 Document the grant as the concrete QEA scenario (who requests, who approves, what''s protected, pending-not-applied behaviour).
-  - [ ] 11.3 **STOP-AND-REPORT gate:** if the grant cannot complete due to the Tide/ORK/QEA blocker, stop task 12, report the blocker, and do NOT weaken the security requirement (no plaintext fallback).
+- [x] 11. QEA-governed voucher-gate role grant (governance demonstration) — GATE for task 12. Live-verified 2026-10-01: CR 1957ce7d…, threshold 1, approved+committed in enclave; `_tide_dob.selfencrypt` granted.
+  - [x] 11.1 Ensure the current player holds `_tide_dob.selfencrypt` / `_tide_dob.selfdecrypt`. If absent, grant via the existing TideCloak IGA/QEA process (change request → approve/commit). Do NOT bypass or fake governance.
+  - [x] 11.2 Document the grant as the concrete QEA scenario (who requests, who approves, what''s protected, pending-not-applied behaviour).
+  - [x] 11.3 **STOP-AND-REPORT gate:** if the grant cannot complete due to the Tide/ORK/QEA blocker, stop task 12, report the blocker, and do NOT weaken the security requirement (no plaintext fallback).
   - _Requirements: 13.1, 13.2, 13.3, 11 (dependency)_
 
 - [ ] 12. Tide-protected private note
@@ -123,17 +123,17 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
   - [ ] 12.4 Tests: owner can round-trip encrypt/decrypt; stored value is not plaintext; server returns only the caller''s row.
   - _Requirements: 10.1, 10.2, 11.1, 11.2, 11.3_
 
-- [ ] 13. Player isolation / security checks
-  - [ ] 13.1 Confirm every player-scoped API filters by JWT `vuid`; add explicit tests that player X cannot read player Y''s inventory or private note via the API.
-  - [ ] 13.2 Record the cross-player *decryption refusal* as asserted-by-construction (self-encryption identity-bound). A live two-player test is now possible (Player B available as of 2026-10-01), but the guarantee holds by construction regardless — no workaround needed.
+- [x] 13. Player isolation / security checks — player isolation verified (headless two-VUID cross-player suite, 64/64; no production code change needed).
+  - [x] 13.1 Confirmed every player-scoped API derives identity from the verified JWT `vuid` and ignores client-supplied vuid/owner/seller/buyer/target fields. Explicit two-VUID tests: A cannot read B's inventory (excluded), read B's private note (gets null / only own), or mutate B's items/listing/note/balance (403/404; B's DB state byte-identical after every spoof). Harness thrown away; `OwnershipSpike.signed-policy.bin` + `transfer-signatures.json` retained.
+  - [x] 13.2 Recorded the cross-player *decryption refusal* as asserted-by-construction (self-encryption identity-bound, Task 12). This task proves the server-side query-scoping/identity boundary (Layer B); the decryption refusal holds by construction independent of it. Headless only — not a live Tide result.
   - _Requirements: 12.1, 12.2, 12.3_
 
 ## Stage H — Admin / RBAC
 
-- [ ] 14. QEA-governed admin operation surface
-  - [ ] 14.1 `app/api/admin/summary/route.ts` (GET, `withRole('admin')`): a minimal admin-only endpoint proving server-side RBAC.
-  - [ ] 14.2 Document that the security-sensitive admin change (role grant, incl. task 11) is governed by IGA/QEA and not applied while a change request is PENDING.
-  - [ ] 14.3 Tests: non-admin → 403; admin → 200; unapproved/pending governed change is not reflected (deny-by-default).
+- [x] 14. QEA-governed admin operation surface
+  - [x] 14.1 `app/api/admin/summary/route.ts` (GET, `withRole('admin')`): a minimal admin-only endpoint proving server-side RBAC.
+  - [x] 14.2 Document that the security-sensitive admin change (role grant, incl. task 11) is governed by IGA/QEA and not applied while a change request is PENDING.
+  - [x] 14.3 Tests: non-admin → 403; admin → 200; unapproved/pending governed change is not reflected (deny-by-default).
   - _Requirements: 1.3, 13.1, 13.2, 13.3_
 
 ## Stage I — Frontend and end-to-end flow

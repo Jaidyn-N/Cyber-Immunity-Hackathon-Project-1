@@ -100,12 +100,12 @@ DONE and approved:
       (`tide_ownership_attestation`), OwnershipSpike, Tide policies, DPoP, or the schema. Buyer identity
       = verified JWT vuid only; body buyer/seller/owner vuids ignored.
 
-- [~] Task 11 — **implemented — pending live QEA verification.** QEA-governed administrative role grant
+- [x] Task 11 — **done — live QEA verified (2026-10-01)**. QEA-governed administrative role grant
       using the EXISTING Tide IGA/QEA mechanism. New server-only IGA client `lib/tide/igaAdmin.ts`
       (`initiateRoleGrantChangeRequest` + read-only `getChangeRequest`/`listPendingChangeRequests`; NO
       approve/commit automation — that is the human enclave step) and admin-only route
       `app/api/admin/private-note-role/route.ts` (`withRole('admin')`). The route hard-restricts the
-      grant target to the allowlist `_tide_privatenote.selfencrypt` / `_tide_privatenote.selfdecrypt`
+      grant target to the allowlist `_tide_dob.selfencrypt` / `_tide_dob.selfdecrypt`
       (reject 400/422 otherwise, before any CR), takes the requesting admin from the verified JWT only,
       and reports the grant as PENDING (not granted) — effective only after the Tide QEA quorum approves
       + commits via the admin browser enclave. Env/MultiAdmin limitation: TideCloak is NOT running and
@@ -120,11 +120,76 @@ DONE and approved:
       `status:'pending'`, body-supplied requester ignored, 202-CR → pending, immediate-apply (200 no CR)
       and connection-refused → clear 5xx (no pretend success), missing admin credential → fail closed.
       This demonstrates Tide GOVERNANCE (Layer B / IGA), NOT Layer C cryptographic item ownership.
-      Task 12 is next.
+      Live QEA confirmed: grant captured as IGA change request 1957ce7d… (threshold 1), held pending,
+      approved+committed in the admin console enclave; role `_tide_dob.selfencrypt` now on the user.
+      See docs/LEARNINGS.md Task 11 live addendum. Task 12 is next.
 
-- [ ] Task 12 — Tide-protected private note (self-encryption; `GET/PUT /api/account/private-note`; `app/account`).
-- [ ] Task 13 — player isolation/security checks.
-- [ ] Task 14 — admin/RBAC surface (`/api/admin/*` withRole('admin')) + QEA doc.
+- [x] Task 12 — **complete (live Tide browser verification)**. Tide-protected private note:
+      server route `GET/PUT /api/account/private-note` (`withAuth` ONLY — identity, no `withRole`, no
+      app role gate) stores/returns ONLY the opaque self-encrypted ciphertext (plaintext never reaches
+      the server; server never decrypts/inspects). Client page `app/account/page.tsx` does `doEncrypt`
+      on save / `doDecrypt` on view via `useTideCloak`, sending only ciphertext over `secureFetch`.
+      **Tag coupling:** the self-encryption tag is `dob` (NOT `privatenote`) because Tide gates
+      tag-based self-encryption on roles `_tide_<tag>.selfencrypt` / `_tide_<tag>.selfdecrypt`, and this
+      realm provisions `_tide_dob.*` (Task 11). The account currently holds `_tide_dob.selfencrypt` but
+      NOT `_tide_dob.selfdecrypt`, so live encrypt-on-save will succeed while decrypt-on-read is expected
+      to be Tide-DENIED until `selfdecrypt` is also granted via the governed Task 11 flow — the intended
+      WITHOUT-role→denied / WITH-role→succeeds demonstration (not worked around). Headless validation of
+      the SERVER route only (the Tide SDK cannot load in Node): 7/7 cases — 401 unauth GET/PUT, store→read
+      same vuid, Player A cannot read Player B's note, body vuid/ownerVuid/targetVuid ignored (identity =
+      JWT), ciphertext returned byte-identical (no transform), 400 on wrong type / >100k chars / invalid
+      JSON (null allowed), and no governance/role-grant symbol or `withRole` in the route code. `typecheck`
+      + `build` clean; both `/account` and `/api/account/private-note` appear in the route list. LIVE Tide
+      browser verification PASSED (2026-10-03): the note `Task 12 Tide private note test - Jaidyn` was
+      encrypted client-side (`doEncrypt`), stored/retrieved as ciphertext, and — only AFTER
+      `_tide_dob.selfdecrypt` was granted via the Task 11 governed IGA/QEA flow (approved + committed) and
+      the session refreshed — decrypted client-side (`doDecrypt`) back to plaintext. Before that grant,
+      decrypt was correctly Tide-DENIED (account had `_tide_dob.selfencrypt` only). The app never
+      decrypted or authorized — Tide did. 7/7 headless route tests remain passed. No forbidden files
+      changed; nothing committed. Task 13 is next.
+- [x] Task 13 — **player isolation verified (headless cross-player suite)**. A two-VUID (Player A +
+      Player B) suite drove every player-scoped route directly against a temp DB with fixture Ed25519
+      DPoP-bound JWTs and asserted BOTH the HTTP status AND B's underlying DB state after each spoof.
+      Result: 64/64 assertions passed and NO production code change was needed — every player-scoped
+      route already derives identity ONLY from the verified JWT `auth.vuid` and ignores client-supplied
+      `vuid`/`owner`/`seller`/`buyer`/`target` fields. Covered: unauthenticated + missing-`cnf.jkt` →
+      401 on all protected routes; `/api/me` returns only the caller + never leaks the note ciphertext;
+      inventory excludes B's instances; A cannot equip/list/cancel B's items (403, B unchanged); A's
+      private-note PUT with spoofed `vuid:B`/`ownerVuid:B` writes only A's row (B's ciphertext
+      byte-identical); obtain/purchase force the buyer to A and never honour a spoofed `buyerVuid`
+      (spoof vuid never created/debited; B's balance+inventory unchanged); the only path param (listing
+      id in cancel) is authorized by `seller_vuid === auth.vuid`, not by the path (A 403s on B's listing
+      id, B 200s on the same id). Layer separation held: zero `tide_ownership_attestation` rows created.
+      `typecheck` + `build` clean; the route list is unchanged (no new/auth-bypassing route; all 15
+      handlers across 11 route files wrap `withAuth`/`withRole`). Throwaway harness deleted;
+      `test-artifacts-temp/OwnershipSpike.signed-policy.bin` + `transfer-signatures.json` retained.
+      Headless only — not a live Tide result. See docs/LEARNINGS.md Task 13 entry. Task 14 is next.
+- [x] Task 14 — **admin/RBAC surface added (headless-verified)**. New admin-only endpoint
+      `GET /api/admin/summary` under `withRole('admin')` proving server-side RBAC: 401 unauthenticated
+      (incl. missing `cnf.jkt`), 403 for a non-admin, 200 for an admin. The admin role is read ONLY from
+      the verified Tide JWT (`realm_access.roles`/`resource_access`) — body `role`/`isAdmin`/`admin` and
+      `?role=` query params cannot elevate (confirmed: non-admin + those spoofs still 403). The response
+      is aggregate ADMINISTRATIVE counts ONLY — `{ ok, requestedByAdminVuid: auth.vuid, summary: {
+      players, itemInstances, activeListings, soldListings, cancelledListings, marketplaceTransactions,
+      activeShopOffers, attestations } }` — no private player data (no ciphertext/balance/note/per-row
+      field; `requestedByAdminVuid` is the verified admin vuid, never client-supplied). SQL lives in a
+      new read-only `lib/db/admin.ts` (`getAdminSummaryCounts`, parameter-free `COUNT(*)` only; the
+      `tide_ownership_attestation` COUNT is a count, not content). The Task 11 governed role-grant route
+      (`/api/admin/private-note-role`) and `lib/tide/igaAdmin.ts` are UNCHANGED — allowlist stays exactly
+      `_tide_dob.selfencrypt`/`_tide_dob.selfdecrypt`, no approve/commit logic in the app. Task 14 adds
+      NO governance of its own: sensitive role changes remain governed by Tide IGA/QEA (Task 11 is the
+      live demonstration); a user whose governed grant is still PENDING simply lacks the role in their
+      token and is treated as a non-admin (403, deny-by-default). Does NOT touch OwnershipSpike / Forseti
+      / Layer C contents / DPoP / `data/tidecloak.json` / `lib/db/schema.sql`. Headless validation 39/39
+      (fixture Ed25519 DPoP-bound JWTs, temp DB, handlers invoked directly, IGA stubbed at
+      `_setFetchForTests`): the auth boundary, counts-only + no-private-data scan, spoof-can't-elevate,
+      seeded counts match, Task 11 regression (unauth 401 / non-admin 403 / arbitrary role 400-422 with
+      initiate never called / allowlisted role → initiate once + pending; no approve/commit symbol), and
+      player/admin separation (non-admin still 200 on `/api/me` + `/api/inventory`). `typecheck` + `build`
+      clean; route list now includes `/api/admin/summary` alongside `/api/admin/private-note-role` and all
+      prior routes; every `app/api/**/route.ts` handler still wraps `withAuth`/`withRole`. Throwaway
+      harness deleted; `OwnershipSpike.signed-policy.bin` + `transfer-signatures.json` retained. Headless
+      only — no live QEA claimed. See docs/LEARNINGS.md Task 14 entry. Task 15 is next.
 - [ ] Task 15 — frontend pages + nav (shop/inventory/marketplace/account; dashboard).
 - [ ] Task 16 — end-to-end beta flow (also first LIVE-token exercise of the APIs).
 - [ ] Task 17 — negative/security tests.

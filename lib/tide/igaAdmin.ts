@@ -24,14 +24,16 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * HARD allowlist of grantable roles — the private-note voucher-gate roles from design.md / tasks.md.
+ * HARD allowlist of grantable roles — the realm's actual Tide self-encrypt/decrypt voucher-gate roles.
+ * Confirmed against the live realm 2026-10: these `_tide_dob.*` roles exist; the earlier
+ * `_tide_privatenote.*` names did NOT exist in this realm and have been corrected.
  * The admin route restricts the grant target to EXACTLY these names; a client can never pass an
  * arbitrary role. Kept here (not in the route file) because Next.js route modules may only export HTTP
  * method handlers + a few framework config fields.
  */
 export const PRIVATE_NOTE_ROLE_ALLOWLIST = [
-  "_tide_privatenote.selfencrypt",
-  "_tide_privatenote.selfdecrypt",
+  "_tide_dob.selfencrypt",
+  "_tide_dob.selfdecrypt",
 ] as const;
 
 /** Raised when the governance backend (TideCloak IGA) is not configured or not reachable. Fail closed. */
@@ -52,6 +54,13 @@ export interface ChangeRequestRef {
   authorizationCount?: number;
   threshold?: number;
   readyToCommit?: boolean;
+  /** Target entity id (e.g. the TideCloak user uuid for a USER/GRANT_ROLES CR). Used to match a CR
+   *  back to the grant we just initiated when the write responds 204/202 without a usable Location. */
+  entityId?: string;
+  /** Raw grant rows if TideCloak exposes them (each may carry a ROLE_ID). Match is a nice-to-have. */
+  roleIds?: string[];
+  /** Creation timestamp if available, so the most-recent CR can be selected when several match. */
+  createdAt?: number;
 }
 
 /**
@@ -99,15 +108,62 @@ function resolveRealm(): string {
 }
 
 /**
- * Obtain an admin bearer token with `manage-realm`. Two supported strategies, both env-driven:
+ * Obtain an admin bearer token with `manage-realm`. Three supported strategies, all env-driven, tried
+ * in priority order:
  *   1. TIDE_ADMIN_TOKEN — a ready-to-use bearer token (simplest; used by ops/scripts).
- *   2. client-credentials trio: TIDE_ADMIN_TOKEN_URL (or derived), TIDE_ADMIN_CLIENT_ID,
- *      TIDE_ADMIN_CLIENT_SECRET — exchanged for a token at call time.
- * If neither is configured, FAIL CLOSED. We never silently proceed without an admin credential.
+ *   2. password grant (preferred on a Tide realm) — if TIDE_ADMIN_USERNAME + TIDE_ADMIN_PASSWORD are
+ *      set, exchange them with grant_type=password using client_id = TIDE_ADMIN_CLIENT_ID_PW
+ *      (default `admin-cli`) against the TOKEN realm TIDE_ADMIN_REALM (default `master`). The
+ *      master bootstrap admin mints normally and holds cross-realm manage-realm. NOTE: this changes
+ *      ONLY the token-minting realm — the IGA/admin API calls still use `realm` (the Tide realm from
+ *      data/tidecloak.json). A client_credentials service account canNOT mint on a Tide realm (it has
+ *      no linked Tide identity → empty-body 502), hence the password grant.
+ *   3. client-credentials trio: TIDE_ADMIN_TOKEN_URL (or derived), TIDE_ADMIN_CLIENT_ID,
+ *      TIDE_ADMIN_CLIENT_SECRET — exchanged for a token at call time (later fallback).
+ * If none is configured, FAIL CLOSED. We never silently proceed without an admin credential.
  */
 async function resolveAdminToken(baseUrl: string, realm: string): Promise<string> {
   const direct = process.env.TIDE_ADMIN_TOKEN;
   if (direct && direct.trim().length > 0) return direct.trim();
+
+  // Strategy 2: master-realm (or configured realm) password grant.
+  const pwUsername = process.env.TIDE_ADMIN_USERNAME;
+  const pwPassword = process.env.TIDE_ADMIN_PASSWORD;
+  if (pwUsername && pwPassword) {
+    const tokenRealm = process.env.TIDE_ADMIN_REALM ?? "master";
+    const pwClientId = process.env.TIDE_ADMIN_CLIENT_ID_PW ?? "admin-cli";
+    const tokenUrl = `${baseUrl}/realms/${tokenRealm}/protocol/openid-connect/token`;
+    const body = new URLSearchParams({
+      grant_type: "password",
+      client_id: pwClientId,
+      username: pwUsername,
+      password: pwPassword,
+    });
+    let res: Response;
+    try {
+      res = await doFetch(tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+    } catch (e) {
+      throw new GovernanceUnavailableError(
+        `Could not reach the token endpoint to obtain an admin token (password grant): ${(e as Error).message}`
+      );
+    }
+    if (!res.ok) {
+      throw new GovernanceUnavailableError(
+        `Admin token request failed (${res.status}) via password grant. Governance backend unavailable.`
+      );
+    }
+    const json = (await res.json()) as { access_token?: string };
+    if (!json.access_token) {
+      throw new GovernanceUnavailableError(
+        "Token endpoint returned no access_token (password grant). Governance backend unavailable."
+      );
+    }
+    return json.access_token;
+  }
 
   const clientId = process.env.TIDE_ADMIN_CLIENT_ID;
   const clientSecret = process.env.TIDE_ADMIN_CLIENT_SECRET;
@@ -145,7 +201,9 @@ async function resolveAdminToken(baseUrl: string, realm: string): Promise<string
 
   throw new GovernanceUnavailableError(
     "No admin credential configured for IGA governance. Set TIDE_ADMIN_TOKEN, or the " +
-      "TIDE_ADMIN_CLIENT_ID + TIDE_ADMIN_CLIENT_SECRET client-credentials trio. Refusing to proceed."
+      "TIDE_ADMIN_USERNAME + TIDE_ADMIN_PASSWORD password grant (optional TIDE_ADMIN_REALM, default " +
+      "master), or the TIDE_ADMIN_CLIENT_ID + TIDE_ADMIN_CLIENT_SECRET client-credentials trio. " +
+      "Refusing to proceed."
   );
 }
 
@@ -168,8 +226,30 @@ function crIdFromLocation(location: string | null): string | undefined {
   return m?.[1];
 }
 
+/** Pull any role ids out of a raw CR's `rows` array (shape varies: ROLE_ID / roleId / role_id / id). */
+function roleIdsFromRaw(raw: Record<string, unknown>): string[] | undefined {
+  const rows = raw.rows;
+  if (!Array.isArray(rows)) return undefined;
+  const ids: string[] = [];
+  for (const row of rows) {
+    if (row && typeof row === "object") {
+      const r = row as Record<string, unknown>;
+      const candidate = r.ROLE_ID ?? r.roleId ?? r.role_id ?? r.id;
+      if (candidate != null) ids.push(String(candidate));
+    }
+  }
+  return ids.length > 0 ? ids : undefined;
+}
+
 /** Normalise a raw CR object from TideCloak into our display-only projection. */
 function toRef(raw: Record<string, unknown>): ChangeRequestRef {
+  const createdRaw = raw.createdAt ?? raw.createdTimestamp ?? raw.created;
+  const createdAt =
+    typeof createdRaw === "number"
+      ? createdRaw
+      : typeof createdRaw === "string" && createdRaw.trim() !== "" && !Number.isNaN(Number(createdRaw))
+        ? Number(createdRaw)
+        : undefined;
   return {
     id: String(raw.id ?? ""),
     status: String(raw.status ?? "PENDING"),
@@ -179,29 +259,60 @@ function toRef(raw: Record<string, unknown>): ChangeRequestRef {
     authorizationCount: typeof raw.authorizationCount === "number" ? raw.authorizationCount : undefined,
     threshold: typeof raw.threshold === "number" ? raw.threshold : undefined,
     readyToCommit: typeof raw.readyToCommit === "boolean" ? raw.readyToCommit : undefined,
+    entityId: raw.entityId != null ? String(raw.entityId) : undefined,
+    roleIds: roleIdsFromRaw(raw),
+    createdAt,
   };
 }
 
-/** Look up the TideCloak user id (uuid) for a given Tide `vuid`. */
+/**
+ * Look up the TideCloak user id (uuid) for a given Tide `vuid`.
+ *
+ * On this realm the vuid is NOT the Keycloak username — it is stored as a custom USER ATTRIBUTE named
+ * `vuid` (verified live: `?username=<vuid>&exact=true` → 0 results, whereas `?q=vuid:<vuid>&exact=true`
+ * → exactly the linked account). So we resolve by the attribute first, then fall back to the username
+ * query to preserve behaviour on realms where the vuid IS the username (the spec's original assumption).
+ */
 async function findUserIdByVuid(env: IgaEnv, targetVuid: string): Promise<string> {
-  // The vuid is stored as the username on Tide-linked accounts. Query by exact username.
-  const url =
+  // 1) Attribute query. Keycloak attribute search uses `q=<name>:<value>`; the colon between name and
+  //    value must survive URL-encoding, so encode the value only and keep `vuid:` literal.
+  const attrUrl =
     `${env.baseUrl}/admin/realms/${env.realm}/users` +
-    `?username=${encodeURIComponent(targetVuid)}&exact=true`;
-  let res: Response;
+    `?q=vuid:${encodeURIComponent(targetVuid)}&exact=true`;
+  let attrRes: Response;
   try {
-    res = await doFetch(url, { method: "GET", headers: authHeaders(env.token) });
+    attrRes = await doFetch(attrUrl, { method: "GET", headers: authHeaders(env.token) });
   } catch (e) {
     throw new GovernanceUnavailableError(`Could not reach TideCloak to resolve the target user: ${(e as Error).message}`);
   }
-  if (!res.ok) {
-    throw new GovernanceUnavailableError(`User lookup failed (${res.status}). Governance backend unavailable.`);
+  if (!attrRes.ok) {
+    throw new GovernanceUnavailableError(`User lookup failed (${attrRes.status}). Governance backend unavailable.`);
   }
-  const users = (await res.json()) as Array<{ id?: string }>;
-  if (!Array.isArray(users) || users.length === 0 || !users[0]?.id) {
-    throw new GovernanceUnavailableError(`No TideCloak user found for the target vuid.`);
+  const attrUsers = (await attrRes.json()) as Array<{ id?: string }>;
+  if (Array.isArray(attrUsers) && attrUsers.length > 0 && attrUsers[0]?.id) {
+    return String(attrUsers[0].id);
   }
-  return String(users[0].id);
+
+  // 2) Fallback: exact username query (realms where the vuid IS the username).
+  const nameUrl =
+    `${env.baseUrl}/admin/realms/${env.realm}/users` +
+    `?username=${encodeURIComponent(targetVuid)}&exact=true`;
+  let nameRes: Response;
+  try {
+    nameRes = await doFetch(nameUrl, { method: "GET", headers: authHeaders(env.token) });
+  } catch (e) {
+    throw new GovernanceUnavailableError(`Could not reach TideCloak to resolve the target user: ${(e as Error).message}`);
+  }
+  if (!nameRes.ok) {
+    throw new GovernanceUnavailableError(`User lookup failed (${nameRes.status}). Governance backend unavailable.`);
+  }
+  const nameUsers = (await nameRes.json()) as Array<{ id?: string }>;
+  if (Array.isArray(nameUsers) && nameUsers.length > 0 && nameUsers[0]?.id) {
+    return String(nameUsers[0].id);
+  }
+
+  // 3) Neither query matched → fail closed with the same message as before.
+  throw new GovernanceUnavailableError(`No TideCloak user found for the target vuid.`);
 }
 
 /** Resolve a realm role representation (needs id + name for the role-mapping call). */
@@ -234,8 +345,11 @@ export interface InitiateResult {
  *
  * Performs the standard Keycloak admin realm role-mapping write
  * (`POST /admin/realms/{realm}/users/{userId}/role-mappings/realm`). On an IGA-enabled realm this does
- * NOT apply immediately — TideCloak responds 202 Accepted and captures it as a change-request
- * (Location → the CR). We treat the result as PENDING, NOT granted, and return the CR reference.
+ * NOT apply immediately — TideCloak captures it as a change-request and responds with a 2xx. Verified
+ * live on this realm: the response is 204 (no body, often no Location) with a PENDING CR created;
+ * 202 Accepted + Location → the CR is the other captured-write shape. We treat BOTH as PENDING, NOT
+ * granted, resolve the real CR (by Location, else by matching USER/GRANT_ROLES/entityId lookup), and
+ * return the CR reference.
  *
  * This method intentionally performs NO approve/commit — on MultiAdmin that requires a human enclave
  * signature (POST /iga/change-requests/{id}/approve) which a headless process cannot complete.
@@ -267,36 +381,82 @@ export async function initiateRoleGrantChangeRequest(args: {
     );
   }
 
-  // Expected on an IGA realm: 202 Accepted + Location → the pending change-request.
-  if (res.status === 202) {
-    const id = crIdFromLocation(res.headers.get("location"));
-    if (id) {
-      // Best-effort status read for display; if it fails we still report PENDING with the id.
-      try {
-        const ref = await getChangeRequest(id, env);
-        return { pending: true, changeRequest: ref };
-      } catch {
-        return { pending: true, changeRequest: { id, status: "PENDING" } };
-      }
-    }
-    // 202 but no Location — surface the newest pending CR as a best effort.
-    const pendings = await listPendingChangeRequests(env);
-    if (pendings.length > 0) return { pending: true, changeRequest: pendings[0] };
-    return { pending: true, changeRequest: { id: "(unknown)", status: "PENDING" } };
+  // Rejection (4xx/5xx) → fail closed, unchanged behaviour.
+  if (!res.ok) {
+    throw new GovernanceUnavailableError(
+      `Governed role grant was rejected by TideCloak (${res.status}). Governance backend unavailable.`
+    );
   }
 
-  // A 2xx that is NOT 202 would mean the write applied immediately — which must NOT happen on an IGA
-  // realm. Treat anything other than a 202-captured CR as a governance backend problem (fail closed).
-  if (res.ok) {
+  // Any 2xx on an IGA-enabled realm means the write was CAPTURED into a change-request, NOT applied.
+  // Verified live on this realm: the role-mapping POST returns 204 (no body, often no Location) while a
+  // PENDING change-request is created. 202 (with a Location) is the other captured-write shape. We must
+  // treat BOTH as governed captures and resolve the real CR — never report a false 503.
+
+  // 1) Prefer the Location header when present (the 202 shape).
+  const locId = crIdFromLocation(res.headers.get("location"));
+  if (locId) {
+    try {
+      const ref = await getChangeRequest(locId, env);
+      return { pending: true, changeRequest: ref };
+    } catch {
+      return { pending: true, changeRequest: { id: locId, status: "PENDING" } };
+    }
+  }
+
+  // 2) No usable Location (the 204 shape) → resolve the CR by LOOKUP, matching THIS grant.
+  const pendings = await listPendingChangeRequests(env);
+  const matches = pendings.filter(
+    (cr) =>
+      cr.entityType === "USER" &&
+      cr.entityId === userId &&
+      cr.actionType === "GRANT_ROLES" &&
+      // role-id row match is a nice-to-have: only exclude when rows are present AND do not contain our role.
+      (cr.roleIds === undefined || cr.roleIds.includes(role.id))
+  );
+  if (matches.length === 1) {
+    return { pending: true, changeRequest: matches[0] };
+  }
+  if (matches.length > 1) {
+    // Pick the most recent if we have timestamps, otherwise just the first — any correct match is fine.
+    const sorted = [...matches].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    return { pending: true, changeRequest: sorted[0] };
+  }
+
+  // 3) No matching CR found. Distinguish a genuine governance failure from an ungoverned immediate apply
+  //    by checking whether the role actually landed on the user.
+  const roleApplied = await userHasRealmRole(env, userId, role.id);
+  if (roleApplied) {
+    // Role applied immediately AND no CR captured → the realm is NOT enforcing governance. Fail closed.
     throw new GovernanceUnavailableError(
       `Role grant returned ${res.status} without an IGA change-request. The realm is not enforcing ` +
         `governance as expected; refusing to report success.`
     );
   }
-
+  // Not applied and no CR found → accepted but we cannot locate the capture. Fail closed.
   throw new GovernanceUnavailableError(
-    `Governed role grant was rejected by TideCloak (${res.status}). Governance backend unavailable.`
+    `Governed role grant accepted (${res.status}) but no matching change-request was found.`
   );
+}
+
+/** READ-ONLY: does the user currently hold the given realm role (by role id)? Used only to disambiguate
+ *  a captured governed write from an ungoverned immediate apply when no CR could be located. */
+async function userHasRealmRole(env: IgaEnv, userId: string, roleId: string): Promise<boolean> {
+  const url = `${env.baseUrl}/admin/realms/${env.realm}/users/${encodeURIComponent(userId)}/role-mappings/realm`;
+  let res: Response;
+  try {
+    res = await doFetch(url, { method: "GET", headers: authHeaders(env.token) });
+  } catch (e) {
+    throw new GovernanceUnavailableError(
+      `Could not reach TideCloak to read the user's role mappings: ${(e as Error).message}`
+    );
+  }
+  if (!res.ok) {
+    throw new GovernanceUnavailableError(`User role-mapping read failed (${res.status}).`);
+  }
+  const arr = (await res.json()) as unknown;
+  if (!Array.isArray(arr)) return false;
+  return arr.some((r) => r && typeof r === "object" && String((r as Record<string, unknown>).id ?? "") === roleId);
 }
 
 /** READ-ONLY: fetch a single change-request by id (status display only). */

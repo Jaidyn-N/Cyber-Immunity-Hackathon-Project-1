@@ -85,7 +85,8 @@ and supports the security objective (protecting private player information).
   `scripts/inspect-db` read) and shows `private_note_ciphertext` is an opaque base64 blob, not the text
   the player typed. Contrast with a plaintext `display_name` column to make the difference visible.
 - **Voucher-gate note (to verify at implementation):** self-encryption needs the player to hold
-  `_tide_privatenote.selfencrypt` / `_tide_privatenote.selfdecrypt` roles (voucher gate). If the realm''s
+  `_tide_dob.selfencrypt` / `_tide_dob.selfdecrypt` roles (voucher gate) (confirmed against the live
+  realm 2026-10-01; the earlier `_tide_privatenote.*` names did not exist in this realm). If the realm''s
   default roles do not include a suitable `_tide_*` gate, assigning these is an IGA change. This is
   flagged as an implementation dependency (see Ready/Blocked) and is the one place Category 2 touches
   governance — which conveniently doubles as the QEA scenario (below).
@@ -120,7 +121,7 @@ and supports the security objective (protecting private player information).
 ### 5. QEA governance scenario — admin grant of a role via existing IGA
 
 - **Concrete change:** granting a realm role to a user (specifically, granting the `admin` role, or the
-  `_tide_privatenote.*` voucher-gate roles needed for Req 11) through the TideCloak Admin API on the
+  `_tide_dob.*` voucher-gate roles needed for Req 11) through the TideCloak Admin API on the
   **IGA-enabled realm** (already in `tide` attestor mode per LEARNINGS).
 - **Who requests:** an operator/admin initiates the role grant (Admin API call).
 - **Who approves:** the change becomes an IGA **change request** requiring the enclave approval /
