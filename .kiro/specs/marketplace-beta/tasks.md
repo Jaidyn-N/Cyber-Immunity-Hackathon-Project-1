@@ -138,10 +138,14 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
 
 ## Stage I — Frontend and end-to-end flow
 
-- [ ] 15. Frontend pages and navigation
-  - [ ] 15.1 Extend `app/dashboard/` to show profile, currency, equipped item; add nav to shop/inventory/marketplace/account.
-  - [ ] 15.2 `app/shop/page.tsx`, `app/inventory/page.tsx`, `app/marketplace/page.tsx`, `app/account/page.tsx` — minimal UI wired to the APIs via `secureFetch`. Use `hasRealmRole` for admin-link visibility ONLY (UI gating, not auth). Marketplace UI labels transfers "temporary application-level (not Tide-backed)".
-  - [ ] 15.3 Keep UI simple (no polish); ensure all mutating calls go through `secureFetch` with absolute URLs.
+- [x] 15. Frontend pages and navigation — implemented; live browser click-through PENDING. Shared
+  auth-gated route group `app/(app)/` + persistent `AppNav`; pages consume existing APIs via
+  `secureFetch` (absolute URLs); `/account` moved into the group (old file deleted, single route);
+  minimal read-only `/admin`. `typecheck`+`build` clean. No API/auth/schema/Tide-config/Task 10-14
+  change. Nothing committed.
+  - [x] 15.1 Dashboard gained nav links to shop/inventory/marketplace/account; the `/account` page shows profile/currency/equipped via `GET /api/me` (shared auth-gated group also renders the persistent nav). `dashboard/layout.tsx` auth logic unchanged.
+  - [x] 15.2 `/shop`, `/inventory`, `/marketplace`, `/account` (moved from `app/account/page.tsx`) wired to the APIs via `secureFetch`. Admin-link visibility uses `hasRealmRole('admin')` (UI gating only; server authoritative). Marketplace labels obtain as temporary application-level (NOT Tide-backed). Task 12 private-note preserved exactly.
+  - [x] 15.3 UI kept simple; ALL authed calls go through `secureFetch` with absolute URLs — grep confirms no bare `fetch(` and no manual `Authorization`/`DPoP`/`Bearer` header in the new client code.
   - _Requirements: 2.2, 3.x, 4.3, 5.1, 7.3, 7.7, 11.x_
 
 - [ ] 16. Complete beta user flow (integration)

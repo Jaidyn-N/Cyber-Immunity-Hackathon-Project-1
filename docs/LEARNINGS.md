@@ -1463,3 +1463,65 @@ committed.
 server-side RBAC boundary logic against real Ed25519 signatures. No live QEA was exercised here (Task 11
 remains the live governance demonstration). No forbidden file changed (OwnershipSpike / Forseti / Layer C
 contents / DPoP / `data/tidecloak.json` / `lib/db/schema.sql` untouched). Task 15 is next.
+
+
+---
+
+## Task 15 — frontend pages + navigation (2026-10-03)
+
+**[Confirmed] Scope: FRONTEND ONLY.** Built the player-facing UI that consumes the existing Task 4–14
+APIs through the existing TideCloak session. No API route, auth, schema, Tide config, `providers.tsx`,
+or Task 10–14 backend code was changed. Live end-to-end browser click-through is **still pending** —
+not claimed as verified here.
+
+**Shared auth-gated route group + nav.** Added `app/(app)/` as a Next.js route group (parentheses →
+does NOT change URLs). `app/(app)/layout.tsx` is a `"use client"` auth gate copied from the dashboard
+pattern (`useTideCloak()`; on `!isInitializing && !authenticated` it calls `login()`; renders a
+"Checking authentication…" placeholder until authenticated) and renders a persistent
+`app/(app)/_components/AppNav.tsx` + the page inside a wider `.app-main` container. This is UI gating
+ONLY — every API route re-verifies the Tide JWT server-side and is the sole authority.
+
+**Pages built (all authed calls via `secureFetch`, absolute `http://localhost:3000/api/...`):**
+- `/shop` — `GET /api/shop` (offers + rotation window) and `GET /api/me` (balance); Buy →
+  `POST /api/shop/purchase {offerId}` (client sends ONLY `offerId`), refreshes balance+offers;
+  402→"Insufficient funds", 409→"Offer is not currently available", 404→"Offer not found".
+- `/inventory` — `GET /api/inventory`; Equip → `POST /api/inventory/equip {instanceId}`, Unequip →
+  `{instanceId:null}`; "Equipped" badge + prominent current-equipped line; never sends a vuid.
+- `/marketplace` — three sections: Browse (`GET /api/marketplace`, Obtain →
+  `POST /api/marketplace/obtain {listingId}` ONLY), Create listing (`POST /api/marketplace/list
+  {instanceId,price}` from tradable+unequipped items), My listings (`GET /api/marketplace/list` +
+  Cancel `DELETE /api/marketplace/list/{id}` for own active listings). Obtain feedback uses the API's
+  own wording and explicitly states this is a **temporary application-level ownership change, NOT a
+  Tide-backed ownership transfer** (Layer A only).
+- `/account` — **MOVED** from `app/account/page.tsx` into the group (URL stays `/account`; old file
+  DELETED so `/account` is a single route). Task 12 private-note behaviour **preserved exactly** (tag
+  `dob`, `doEncrypt` on save / `doDecrypt` on view, ciphertext-only to the server, the
+  `_tide_dob.selfdecrypt` voucher-denied messaging). ADDED a `GET /api/me` profile panel (displayName,
+  balance, equipped, hasPrivateNote, short vuid). No plaintext to the server, no app-side crypto, no
+  app-side `_tide_dob.*` role check.
+- `/admin` — minimal read-only summary (`GET /api/admin/summary`); on 403 shows "Admin access
+  required." No approval/quorum/role-grant/QEA UI.
+
+**Admin link gating.** `AppNav` shows the Admin link only when `hasRealmRole("admin")` from the Tide
+context — never a client-stored flag. Commented that this is UI only; the server (`withRole('admin')`)
+is authoritative.
+
+**[Confirmed] No second auth mechanism / no manual headers.** Grep of `app/(app)/**/*.tsx`: every
+authed call uses `secureFetch`; zero bare `fetch(`; no `Authorization`/`DPoP`/`Bearer` header
+constructed by hand (only `Content-Type: application/json` on mutations). `providers.tsx` strict DPoP
+untouched; `dashboard/layout.tsx` auth logic untouched (dashboard gained nav links only).
+
+**CSS.** Modest hand-rolled additions to `app/globals.css` only (`.app-main` wider container,
+`.app-nav`/`.nav-*`, `.panel`, `.card-grid`/`.card`, `.badge`/`.badge-equipped`/`.badge-rarity`,
+`.feedback`/`.feedback-ok`/`.feedback-err`, `.empty-state`, `.field-row`, `textarea`). No CSS
+framework, no new dependencies. `main` (login/dashboard card) left as-is.
+
+**[Confirmed] Validation.** `npm run typecheck` clean and `npm run build` clean. Build route list
+includes `/shop`, `/inventory`, `/marketplace`, `/account` (exactly once), `/admin`, and all existing
+API routes. One wrinkle: after deleting the old `app/account/page.tsx`, a stale generated
+`.next/dev/types/app/account/page.ts` referenced the removed module; deleting the generated `.next/dev`
+cache and rebuilding cleared it (generated artefact only — no source change).
+
+**Limitation.** No headless UI tests exist for these pages; the live click-through
+(login → shop → buy → inventory → equip → list → obtain → account note) is **PENDING manual browser
+verification** and is deliberately NOT claimed as done. Nothing committed. Task 16 next.

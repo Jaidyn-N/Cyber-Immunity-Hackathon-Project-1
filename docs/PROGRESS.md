@@ -190,7 +190,32 @@ DONE and approved:
       prior routes; every `app/api/**/route.ts` handler still wraps `withAuth`/`withRole`. Throwaway
       harness deleted; `OwnershipSpike.signed-policy.bin` + `transfer-signatures.json` retained. Headless
       only — no live QEA claimed. See docs/LEARNINGS.md Task 14 entry. Task 15 is next.
-- [ ] Task 15 — frontend pages + nav (shop/inventory/marketplace/account; dashboard).
+- [x] Task 15 — **implemented — pending live browser click-through**. Frontend pages + navigation,
+      FRONTEND ONLY, consuming the existing APIs through the existing TideCloak session (no API/auth/
+      schema/Tide-config/Task 10-14 backend change). A shared auth-gated route group `app/(app)/`
+      (`layout.tsx`, dashboard auth pattern — on `!isInitializing && !authenticated` calls `login()`,
+      "Checking authentication…" placeholder) renders a persistent `AppNav`
+      (`app/(app)/_components/AppNav.tsx`) + the page. Pages (URLs stay flat): `/shop`
+      (`GET /api/shop` + `GET /api/me`; buy → `POST /api/shop/purchase {offerId}`; 402/409/404 mapped),
+      `/inventory` (`GET /api/inventory`; equip/unequip → `POST /api/inventory/equip {instanceId|null}`),
+      `/marketplace` (browse `GET /api/marketplace` + obtain `POST /api/marketplace/obtain {listingId}`
+      labelled **temporary application-level, NOT Tide-backed**; create listing `POST
+      /api/marketplace/list {instanceId,price}` from eligible tradable+unequipped items; my-listings
+      `GET /api/marketplace/list` + cancel `DELETE /api/marketplace/list/{id}`), `/account` (MOVED from
+      `app/account/page.tsx` into the group — Task 12 private-note behaviour preserved EXACTLY, tag
+      `dob`, doEncrypt/doDecrypt, ciphertext-only, voucher-denied messaging — PLUS a `GET /api/me`
+      profile panel), and a minimal read-only `/admin` (`GET /api/admin/summary`; 403 → "Admin access
+      required"). Old `app/account/page.tsx` DELETED — `/account` is a single route (confirmed in the
+      build route list). Nav shows the Admin link ONLY when `hasRealmRole('admin')` (UI gating only;
+      server authoritative). ALL authed calls use `secureFetch` with absolute `http://localhost:3000/api/...`
+      URLs — grep confirms NO bare `fetch(` and NO manually constructed `Authorization`/`DPoP`/`Bearer`
+      header in the new client code (only `Content-Type`). `providers.tsx` (strict DPoP) and
+      `dashboard/layout.tsx` auth logic untouched; dashboard gained nav links only. CSS: modest additions
+      to `app/globals.css` (`.app-main`, `.app-nav`/`.nav-*`, `.panel`, `.card-grid`/`.card`, `.badge*`,
+      `.feedback*`, `.empty-state`, form rows) — no framework, no new deps. `npm run typecheck` + `npm run
+      build` clean; route list includes `/shop`, `/inventory`, `/marketplace`, `/account` (×1), `/admin`.
+      Task 12 `/api/account/private-note` and Task 14 `/api/admin/summary` untouched. LIVE end-to-end
+      browser click-through is PENDING manual verification (not claimed). Nothing committed. Task 16 next.
 - [ ] Task 16 — end-to-end beta flow (also first LIVE-token exercise of the APIs).
 - [ ] Task 17 — negative/security tests.
 - [ ] Task 18 — docs + cleanup.
