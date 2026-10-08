@@ -148,9 +148,9 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
   - [x] 15.3 UI kept simple; ALL authed calls go through `secureFetch` with absolute URLs — grep confirms no bare `fetch(` and no manual `Authorization`/`DPoP`/`Bearer` header in the new client code.
   - _Requirements: 2.2, 3.x, 4.3, 5.1, 7.3, 7.7, 11.x_
 
-- [ ] 16. Complete beta user flow (integration)
-  - [ ] 16.1 Wire and manually verify: login → profile/currency/inventory → shop → purchase → inventory → equip → avatar shows equipped → list eligible item → (second login) obtain listing → Layer A ownership changes → previous owner loses app access → new owner gains it → private note encrypt/decrypt.
-  - [ ] 16.2 Note in the flow which steps are app-level (Layer A) vs Tide ownership (Layer C). Player B / rebinding is demonstrated (2026-10-01); exclusive Tide-backed transfer + supersession remain UNRESOLVED and out of beta scope.
+- [x] 16. Complete beta user flow (integration) — Live browser E2E verified 2026-10-03 (all 8 steps incl. real two-player obtain; Layer A transfer).
+  - [x] 16.1 Wire and manually verify: login → profile/currency/inventory → shop → purchase → inventory → equip → avatar shows equipped → list eligible item → (second login) obtain listing → Layer A ownership changes → previous owner loses app access → new owner gains it → private note encrypt/decrypt.
+  - [x] 16.2 Note in the flow which steps are app-level (Layer A) vs Tide ownership (Layer C). Player B / rebinding is demonstrated (2026-10-01); exclusive Tide-backed transfer + supersession remain UNRESOLVED and out of beta scope.
   - _Requirements: Success Condition; 1-13, 17_
   - _Checkpoint: `npm run typecheck`; `npm run build`._
 

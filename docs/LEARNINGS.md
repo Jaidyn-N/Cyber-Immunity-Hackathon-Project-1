@@ -1525,3 +1525,38 @@ cache and rebuilding cleared it (generated artefact only — no source change).
 **Limitation.** No headless UI tests exist for these pages; the live click-through
 (login → shop → buy → inventory → equip → list → obtain → account note) is **PENDING manual browser
 verification** and is deliberately NOT claimed as done. Nothing committed. Task 16 next.
+
+---
+
+# Task 16 — End-to-end beta flow: LIVE browser verification — PASSED (2026-10-03)
+
+The full playable beta flow was exercised in the real running application (operator browser session,
+real TideCloak enclave login) and all steps passed. This is the live FRONTEND/player-flow verification;
+it is distinct from — and does not restate — the already-verified security properties (Task 11 live QEA,
+Task 12 live Tide encrypt/decrypt, Task 13 server-side player isolation).
+
+- [Confirmed] **Step results (live browser):** Authentication PASS; Shop PASS; Purchase PASS (balance
+  decreased, item owned by the authed player); Inventory PASS; Equip PASS (persists, shown on account);
+  Marketplace listing PASS; Marketplace obtain PASS; Account private-note PASS.
+- [Confirmed] **Real two-player marketplace obtain.** Player A listed an item; a SECOND real Tide-linked
+  account (Player B) logged in in a separate session, viewed the listing, and obtained it. Application
+  ownership (Layer A `item_instance.owner_vuid`) moved A→B and balances adjusted. This is the Layer A
+  **application-level temporary transfer** (transfer_kind='application-level-temporary') — explicitly
+  NOT a Tide-backed (Layer C) ownership transfer. No `tide_ownership_attestation` row is created by the
+  obtain; OwnershipSpike/Forseti/Layer C are untouched.
+- [Confirmed] **Private note end-to-end (live).** The note was encrypted client-side via Tide `doEncrypt`
+  (tag `dob`), the app stored/returned only ciphertext (never decrypting it), and Tide `doDecrypt`
+  returned the plaintext client-side — consistent with the Task 12 live result and the `_tide_dob.*`
+  voucher gate.
+- [Confirmed] **Backing automated evidence.** 43/43 headless backend assertions passed across the flow
+  (purchase success + 404 + 402-no-change; equip own/not-owned 403; list eligible / equipped-409 /
+  not-owner-403; cancel own-200 / other-403; obtain A→B with NO Layer C row + 409 + 402 + spoofed
+  buyer/seller ignored; private-note store/own-only/body-vuid-ignored; admin 403/200). `npm run
+  typecheck` and `npm run build` clean; all pages present in the route list; every authenticated client
+  call uses `secureFetch` (no bare fetch, no hand-built auth headers).
+- [Confirmed] **Layer separation preserved end-to-end.** Layer A (application ownership / marketplace),
+  Layer B (Tide auth + RBAC), and Layer C (Tide ownership attestations) remained distinct; the beta
+  marketplace transfer is Layer A only and is labelled as such in the UI.
+- [Note] Known non-blocking limitations (out of scope, not failures): item ids shown where the API
+  carries no name (own-listings short id, equipped-item short id); 1-hour shop rotation; 5-item
+  capacity; single equipped item. These are future polish, intentionally not addressed in Task 16.

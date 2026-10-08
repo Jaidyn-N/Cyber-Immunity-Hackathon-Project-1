@@ -216,7 +216,12 @@ DONE and approved:
       build` clean; route list includes `/shop`, `/inventory`, `/marketplace`, `/account` (×1), `/admin`.
       Task 12 `/api/account/private-note` and Task 14 `/api/admin/summary` untouched. LIVE end-to-end
       browser click-through is PENDING manual verification (not claimed). Nothing committed. Task 16 next.
-- [ ] Task 16 — end-to-end beta flow (also first LIVE-token exercise of the APIs).
+- [x] Task 16 — end-to-end beta flow (also first LIVE-token exercise of the APIs). **complete — live
+      browser end-to-end verified (2026-10-03)**. All 8 steps passed live: login → shop → purchase →
+      inventory → equip → marketplace list → two-player obtain (real Player B in a separate session;
+      Layer A application-level transfer, NOT Tide-backed) → account private-note doEncrypt/doDecrypt.
+      Backed by 43/43 headless backend assertions + clean typecheck/build. Task 11 QEA / Task 12 crypto
+      / Task 13 isolation remain the separately-verified security properties. Task 17 is next.
 - [ ] Task 17 — negative/security tests.
 - [ ] Task 18 — docs + cleanup.
 
