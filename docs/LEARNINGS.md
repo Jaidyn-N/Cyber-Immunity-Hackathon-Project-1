@@ -1560,3 +1560,93 @@ Task 12 live Tide encrypt/decrypt, Task 13 server-side player isolation).
 - [Note] Known non-blocking limitations (out of scope, not failures): item ids shown where the API
   carries no name (own-listings short id, equipped-item short id); 1-hour shop rotation; 5-item
   capacity; single equipped item. These are future polish, intentionally not addressed in Task 16.
+
+---
+
+# Task 17 — Consolidated, repeatable security test suite (2026-10-08)
+
+The throwaway Task 8–16 validation harnesses were replaced by ONE persistent suite at
+`tests/security/`, runnable via `npm run test:security`. It exercises the real, unmodified
+server/route/repository layer against a FIXTURE Ed25519 adapter (`CLIENT_ADAPTER`) and a throwaway OS
+temp DB (`APP_DB_PATH`) — it never touches `data/app.db`, OwnershipSpike, Forseti, the attestation
+code, `providers.tsx`, `tidecloak.json`, or the schema, and no security check was weakened. The only
+production change was adding the one npm script.
+
+- [Confirmed] **Headless result: 119/119 assertions passed, exit 0.** Group counts: A. Authentication
+  60 (every protected route × {no token, no `cnf.jkt`, expired, bad signature} → 401); B. Player
+  isolation 8 (Task 13 core subset — identity from JWT only, body `vuid/ownerVuid/...` ignored, A
+  cannot read/mutate B); C. Inventory/equip 6; D. Private note 4 (opaque ciphertext round-trips
+  verbatim, self-only, no `withRole`/decrypt/governance symbol in the route code); E. Marketplace 22
+  (list/cancel authz, obtain atomicity, **replay → 409 with no second transfer**, insufficient funds →
+  402 no partial state, **forced-fault rollback via a `db.prepare` spy at the transaction INSERT**, and
+  **0 `tide_ownership_attestation` rows written by obtain** — the Layer A/C boundary); F. Shop/purchase
+  8 (server-authoritative price/owner/buyer; failures leave balance+inventory unchanged); G. Admin/RBAC
+  6 (role from JWT only; spoofed `role`/`isAdmin`/`admin`/`?role=admin` never elevate; summary is
+  aggregate-only); H. QEA boundary 5 (allowlist is EXACTLY `_tide_dob.selfencrypt`/`_tide_dob.selfdecrypt`,
+  arbitrary/escalation roles → 422 **before** any governance call, IGA fetch seam stubbed, no
+  approve/commit automation in the code). Every negative case also asserts the target's state is
+  UNCHANGED.
+- [Confirmed] **Three-way evidence distinction (made explicit in `docs/SECURITY-TEST-PLAN.md`):**
+  1. **Headless/automated** — groups A–H above, re-runnable.
+  2. **Live browser (previously verified, NOT re-run)** — Task 11 live QEA (CR `1957ce7d…`), Task 12
+     live Tide self-encrypt/decrypt, Task 16 live end-to-end incl. the real two-player obtain. The Tide
+     SDK does not load in Node, so these are referenced as prior browser evidence, never claimed headlessly.
+  3. **Documented architectural limitations** — **four-eyes/two-person approval NOT demonstrated**
+     (live QEA threshold = 1); **OwnershipSpike supersession/revocation NOT demonstrated** (A's prior
+     signature still verifies after B's); the marketplace obtain is **Layer A only, NOT Tide-backed**.
+- [Confirmed] **Toolchain.** The suite runs under `node --experimental-strip-types` with a test-only
+  resolve hook (`tests/security/resolve-hook.mjs`) that maps the `@/` alias and extensionless TS
+  imports — the same mapping the earlier throwaway harnesses used, now persisted. `npm run typecheck`
+  and `npm run build` are clean: `tsc` only compiles `.ts`/`.tsx` so the `.mjs` suite is not
+  type-checked, and `tests/` is outside the Next build. The suite seeds fixtures with synthetic
+  deterministic vuids (A/B/admin) — never a real operator vuid or secret — and deletes its temp DB on exit.
+
+---
+
+# Task 18 — Final documentation reconciliation + cleanup (2026-10-08)
+
+Documentation-and-hygiene task only. No production source, security mechanism, OwnershipSpike, Forseti,
+attestation code, Task 10–17 code, `providers.tsx`, `data/tidecloak.json`, or the DB schema was changed.
+Nothing was committed.
+
+- [Confirmed] **Docs reconciled to the final completed state (Tasks 0–18).** `docs/PROGRESS.md` header
+  updated (was "after Task 7") with a new "Final status" section carrying the live-vs-headless-vs-limitation
+  distinction; `docs/SYSTEM-ARCHITECTURE.md` reconciled so Layers A (app/DB marketplace) and B (TideCloak
+  auth + RBAC) read as built rather than "proposed/not built", with Layer C kept as the ownership
+  attestation PoC and the supersession-unresolved note preserved; `docs/DEVELOPMENT-BACKLOG.md` marks the
+  delivered items (DATA/AUTH/INV/SHOP/MKT + the Tide security/governance work) done while keeping
+  supersession/revocation, exclusive Tide-backed transfer, and four-eyes as open known-limitations; the
+  spec `requirements.md`/`design.md`/`tasks.md` status lines reconciled (Task 18 checked; Req 14 rebinding
+  Demonstrated; Req 15/16 exclusive transfer + supersession still Unresolved; Category 1/2 delivered).
+  Earlier dated entries, the Player B / supersession investigation section, and the Task 11/12/16 addenda
+  were left intact (historical evidence not rewritten).
+- [Confirmed] **Pointers added for a new developer.** `README.md` was a one-line stub; it is now a real
+  run guide (what the project is, prerequisites, install, env-var NAMES only, TideCloak startup, app
+  startup, DB behaviour, login flow, the `_tide_dob.*` governed voucher roles, how to run the security
+  suite, typecheck/build, and a docs index). New `docs/HANDOFF-TEST-PLAN.md` gives a numbered manual test
+  script (setup → test accounts → core flow → Tide auth/access checks → negative cases → expected results
+  → known limitations → how to reproduce the Task 11/12/16 demonstrations). No secret value is printed in
+  either file — env vars are referenced by name only and credentials are stated to be local-only and
+  supplied separately.
+- [Confirmed] **Historical `_tide_privatenote` strings deliberately retained.** The remaining
+  `_tide_privatenote` mentions in LEARNINGS/design are intentional corrective context ("role names later
+  corrected to `_tide_dob.*`"). They were NOT scrubbed — removing them would erase the correction record.
+- [Confirmed] **Cleanup findings.** No temporary/diagnostic routes, throwaway scripts, or debug logging
+  remain. The `app/(app)` group and `scripts/` are clean (`scripts/` holds only `init-tidecloak.ps1`);
+  the throwaway Task-8–16 harnesses were already deleted at Task 17; `tests/security/` is the single
+  persistent suite. `test-artifacts-temp/OwnershipSpike.signed-policy.bin` + `transfer-signatures.json`
+  retained (gitignored). No `console.log`/TODO/FIXME debug markers in `app/**`.
+- [Confirmed] **`.gitignore` hygiene.** The Task-17 commit had accidentally tracked generated/sidecar
+  files. Minimal fix: added `data/*.db-shm`, `data/*.db-wal` (SQLite sidecars), `tsconfig.tsbuildinfo`
+  and `next-env.d.ts` (generated) to `.gitignore`, and ran `git rm --cached` on the four tracked ones
+  (`data/app.db-shm`, `data/app.db-wal`, `tsconfig.tsbuildinfo`, `next-env.d.ts`) — a removal-from-index
+  only; the files stay on disk and nothing was committed. `.env` confirmed NOT tracked
+  (`git ls-files .env` empty); its secrets stay local + gitignored and were never read or printed.
+- [Confirmed] **Validation remained clean.** `npm run test:security` → 119/119 (exit 0),
+  `npm run typecheck` clean, `npm run build` clean — expected, since only docs + `.gitignore` + the
+  index untracking changed.
+
+**Limitations re-affirmed (documented, not hidden):** live QEA threshold = 1 → no four-eyes/two-person
+approval demonstrated; `OwnershipSpike` has no supersession/revocation; the marketplace obtain is Layer A
+only (NOT Tide-backed). These are stated in `README.md`, `docs/HANDOFF-TEST-PLAN.md`,
+`docs/SECURITY-TEST-PLAN.md`, `docs/SYSTEM-ARCHITECTURE.md`, and the spec. Marketplace Beta spec complete.

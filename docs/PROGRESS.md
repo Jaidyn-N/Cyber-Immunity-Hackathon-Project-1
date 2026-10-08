@@ -4,7 +4,33 @@
 > can continue without the chat history. The authoritative detail lives in `docs/LEARNINGS.md` and
 > `.kiro/specs/marketplace-beta/{requirements,design,tasks}.md`. This file is a summary/index.
 >
-> Last updated: 2026-09-07, after Task 7.
+> Last updated: 2026-10-08, after Task 18 (final documentation + cleanup). Tasks 0–18 complete.
+
+## Final status (Tasks 0–18 complete)
+
+The Marketplace Beta spec is implemented end-to-end: Tasks 0–18 are all done. The build, typecheck,
+and the consolidated security suite (`npm run test:security`) are clean.
+
+Evidence is deliberately recorded at three distinct levels — do not conflate them:
+
+- **Live browser (real TideCloak enclave):** Task 11 governed QEA role grant (change request
+  `1957ce7d…`, approved + committed in the enclave, 2026-10-01; roles `_tide_dob.selfencrypt` /
+  `_tide_dob.selfdecrypt`); Task 12 live Tide self-encrypt/decrypt of the private note (tag `dob`,
+  client-side only, server stores opaque ciphertext); Task 16 full end-to-end flow including a **real
+  two-player marketplace obtain** (A→B, Layer A application-level transfer, NOT Tide-backed, no Layer C
+  row written).
+- **Headless/automated (re-runnable):** Task 13 player isolation and the Task 17 consolidated suite —
+  `npm run test:security` → **119/119** assertions, exit 0. The Tide SDK cannot load in Node, so live
+  Tide crypto is never claimed headlessly.
+- **Documented limitations (visible, not failures):** live QEA threshold = 1, so **four-eyes /
+  two-person approval is NOT demonstrated**; `OwnershipSpike` has **no supersession/revocation** (A's
+  prior signature still verifies after B's); **full exclusive Tide-backed marketplace transfer is NOT
+  demonstrated** (the beta transfer is Layer A only). Non-blocking UI/scope items: 1-hour shop rotation,
+  5-item shop capacity, single equipped item (no equipment-slot system), some item ids shown where the
+  API carries no name, slight auth-demo/dashboard nav redundancy.
+
+New-developer entry points: `README.md` (run instructions) and `docs/HANDOFF-TEST-PLAN.md` (manual test
+script). The security matrix lives in `docs/SECURITY-TEST-PLAN.md`.
 
 ## What this project is
 
@@ -222,8 +248,15 @@ DONE and approved:
       Layer A application-level transfer, NOT Tide-backed) → account private-note doEncrypt/doDecrypt.
       Backed by 43/43 headless backend assertions + clean typecheck/build. Task 11 QEA / Task 12 crypto
       / Task 13 isolation remain the separately-verified security properties. Task 17 is next.
-- [ ] Task 17 — negative/security tests.
-- [ ] Task 18 — docs + cleanup.
+- [x] Task 17 — negative/security tests. Consolidated repeatable suite at `tests/security/`
+      (`npm run test:security`): 119/119 headless assertions, exit 0. Matrix in
+      `docs/SECURITY-TEST-PLAN.md` (groups A–I), with the live-browser vs headless vs
+      documented-limitation boundaries made explicit.
+- [x] Task 18 — docs + cleanup. Reconciled all docs to the final state (PROGRESS/LEARNINGS/
+      SYSTEM-ARCHITECTURE/DEVELOPMENT-BACKLOG and the spec status lines); rewrote `README.md` into a
+      real run guide; added `docs/HANDOFF-TEST-PLAN.md` (new-dev manual test script); confirmed temp
+      test app files removed, `test-artifacts-temp/` retained, no OwnershipSpike/DPoP/auth change;
+      `.gitignore` hygiene fix + untracked accidentally-tracked generated files. Nothing committed.
 
 ## Working conventions established (follow these)
 

@@ -15,6 +15,42 @@ Tasks marked **[TIDE-CRITICAL]** are the ones that specifically prove the Tide o
 (tamper resistance + authority transfer). If only these succeed, the PoC has still answered its
 research questions.
 
+## Delivered status (2026-10-08, Marketplace Beta Tasks 0–18 complete)
+
+The Marketplace Beta (Layer A + Layer B) is implemented and the Tide security/governance work is
+demonstrated live. Mapping backlog IDs to delivery:
+
+- **Done (delivered by the beta):**
+  - **ENV-1 / ENV-2 / ENV-3** — realm config reconciled; realm verified provisioned for signing; live
+    token carries a non-empty `vuid` (LEARNINGS live-verification sections).
+  - **AUTH-1** — `lib/auth/` server-side auth (`verifyTideJWT` local JWKS, `withAuth`/`withRole`,
+    `cnf.jkt`). **AUTH-2** — server-side `admin` RBAC gate (`GET /api/admin/summary`, Task 14; UI uses
+    `hasRealmRole` for display only).
+  - **DATA-1** — SQLite persistence + domain model (`lib/db/`, Task 1–2).
+  - **SHOP-1** — rotating shop + purchase (Tasks 7–8). **INV-1** — inventory + equip (Tasks 5–6).
+    **MKT-1** — marketplace list + obtain, as a Layer A application-level transfer (Tasks 9–10, live
+    two-player obtain at Task 16).
+  - **TIDE-1** — SDK signing reachability spike (verified). **TIDE-2/TIDE-3** — `OwnershipSpike`
+    contract deployed + attestation minted (PoC). **TIDE-4** — independent VVK verification demonstrated.
+  - **TEST-1** — consolidated server-side negative/security suite (`tests/security/`,
+    `npm run test:security` → 119/119; Task 17), matrix in `docs/SECURITY-TEST-PLAN.md`.
+  - Plus the Tide security/governance pieces not in the original table: **Task 11** live QEA-governed
+    `_tide_dob.*` role grant, **Task 12** Tide self-encrypted private note (Layer B / Category 2).
+  - **DOC-1** — living docs kept current (ongoing; this reconciliation is Task 18).
+
+- **Open / known limitations (NOT delivered — intentionally out of beta scope):**
+  - **TIDE-5** (DB-tamper cannot grant *exercisable* authority), **TIDE-6/TIDE-7/TIDE-8** (exclusive
+    Tide-backed transfer: new owner gains authority AND previous owner loses it) — the rebinding /
+    new-attestation parts are demonstrated, but **supersession/revocation is not provided by the current
+    `OwnershipSpike` contract** (A's prior attestation still verifies after B's). The beta marketplace
+    transfer is Layer A only.
+  - **Four-eyes / two-person approval** — live QEA threshold = 1, so this is NOT demonstrated.
+  - **MKT-2 / SHOP-2 / CHAR-1 / POL-1 / ONB-1** — supporting breadth and polish, not required for the
+    beta thesis (SHOP-2 limited-drop realism partially present as the 1-hour rotation / 5-item cap).
+
+See the "Tide ownership investigation status" section below (unchanged) for the detailed
+rebinding-vs-supersession split.
+
 ## Core ownership flow this backlog must prove
 
 Player A authenticates -> A obtains an item -> item owned by A -> A lists it -> B obtains it ->

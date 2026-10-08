@@ -21,6 +21,16 @@ and via a **Category** and **Status** line:
 
 **Status legend:** `[Implementing now]`, `[In scope — Tide security]`, `[Demonstrated]` (Tide capability shown to work), `[Unresolved]` (tested or analysed, not provided by the current contract), `[Blocked]` (cannot be exercised yet).
 
+> **Final reconciliation (2026-10-08, Tasks 0–18 complete).** Category 1 (Core Beta) and Category 2
+> (Tide Security — governed `_tide_dob.*` grant + Tide self-encrypted private note) are **delivered and
+> verified** (live browser for Tasks 11/12/16; headless `npm run test:security` → 119/119). Category 3
+> status is unchanged: Req 14 ownership **rebinding is Demonstrated**; Req 15/16 **exclusive Tide-backed
+> transfer and supersession/revocation remain Unresolved** (not provided by the current `OwnershipSpike`
+> contract) and are out of beta scope. The beta marketplace transfer is **Layer A only** (never
+> Tide-backed). Also documented, not failures: live QEA threshold = 1, so **four-eyes/two-person
+> approval is NOT demonstrated**. No requirement was changed in substance; only status annotations were
+> reconciled.
+
 ### Confirmed Tide status carried in from `docs/LEARNINGS.md` (do not regress)
 
 - [Confirmed] An authenticated `vuid` can be bound to an item via the existing `OwnershipSpike` policy;

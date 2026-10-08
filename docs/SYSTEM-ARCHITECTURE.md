@@ -1,26 +1,42 @@
-﻿# System Architecture (Initial / Proposed PoC)
+﻿# System Architecture
 
-Proposed architecture for the Tide-protected gaming marketplace PoC. It is grounded in the findings in
-`docs/LEARNINGS.md` and verified Tide capabilities from the Tide MCP pack. Components that are not yet
-verified in this project are marked [Investigation]; everything else reflects the current codebase or
-VERIFIED pack guidance.
+Architecture for the Tide-protected gaming marketplace PoC. It is grounded in the findings in
+`docs/LEARNINGS.md` and verified Tide capabilities from the Tide MCP pack.
 
-> Scope note: this describes the *target* PoC, built incrementally. Only the authentication layer
-> exists today. The database, application API, and Tide ownership-authority layer are proposed.
+> Status (2026-10-08, Tasks 0–18 complete): Layer A (application/DB marketplace) and Layer B (TideCloak
+> auth + server-side RBAC) are **built and running** — the SQLite data layer, the full application API
+> surface, and server-side JWT/DPoP verification all exist. Layer C (Tide ownership attestation) remains
+> a **proof-of-concept**: the existing `OwnershipSpike` contract can bind/rebind an item to an owner
+> `vuid` and that is independently VVK-verifiable, but it provides no supersession/revocation, and the
+> beta marketplace transfer is Layer A only (never writes `tide_ownership_attestation`). Items below that
+> described future work now reflect what was built; the Layer C supersession limitation is unchanged and
+> noted throughout.
+
+## Implemented API surface (Layer A + B, built)
+
+All routes are Next.js App Router handlers under `app/api/**`, each wrapped in `withAuth` (identity) or
+`withRole('admin')` (RBAC); identity is the verified JWT `vuid` only. `GET /api/me`,
+`GET /api/inventory`, `POST/GET /api/inventory/equip`, `GET /api/shop`, `POST /api/shop/purchase`,
+`GET /api/marketplace`, `POST/GET /api/marketplace/list` + `DELETE /api/marketplace/list/[id]`,
+`POST /api/marketplace/obtain` (Layer A temporary transfer, `transfer_kind='application-level-temporary'`,
+never Layer C), `GET/PUT /api/account/private-note` (opaque self-encrypted ciphertext only),
+`POST /api/admin/private-note-role` (Task 11 governed `_tide_dob.*` grant via Tide IGA/QEA),
+`GET /api/admin/summary` (aggregate counts only). Player-facing pages live under the `app/(app)/`
+auth-gated route group.
 
 ---
 
 ## 1. Major application components
 
-| Component | Status today | Role in the PoC |
-|-----------|--------------|-----------------|
-| Player Browser (Next.js client + Tide SWE) | Exists (auth only) | Renders shop/inventory/marketplace UI; hosts the Tide Secure Web Enclave (SWE) iframe; the **only** place ORK signing can happen (browser-only constraint) |
-| Next.js App (App Router, React 19) | Exists | Serves pages and the client bundle; hosts the `TideCloakProvider`; hosts the Application API (route handlers) |
-| Application API / Server (route handlers under `app/api/*`) | Not built | Server-side JWT + DPoP verification, RBAC, ownership-proof verification, verify-on-read, transaction orchestration |
-| Database / persistence | Not built | Players, characters, items, item instances, inventory, shop listings, marketplace listings, transactions, and stored ownership attestations |
-| Auth/Identity layer (`lib/auth/`) | Not built | `loadTideConfig`, `verifyTideJWT` (local JWKS), `withAuth`/`withRole`, `cnf.jkt` assertion |
-| Ownership-authority layer (`lib/ownership/`, `forseti/`) | Not built [Investigation] | Build/verify signed ownership attestations; the Forseti contract binding item->owner vuid; VVK verification; supersession logic |
-| Standalone verifier | Not built [Investigation] | Independent check of an ownership attestation against the realm VVK (no dependency on app code) |
+| Component | Status (Tasks 0–18) | Role in the PoC |
+|-----------|--------------------|-----------------|
+| Player Browser (Next.js client + Tide SWE) | Built | Renders shop/inventory/marketplace/account/admin UI (`app/(app)/`); hosts the Tide Secure Web Enclave (SWE) iframe; the **only** place ORK signing / self-encryption can happen (browser-only constraint) |
+| Next.js App (App Router, React 19) | Built | Serves pages and the client bundle; hosts the `TideCloakProvider`; hosts the Application API (route handlers) |
+| Application API / Server (route handlers under `app/api/*`) | Built | Server-side JWT + DPoP (`cnf.jkt`) verification, RBAC, per-`vuid` scoping, atomic transaction orchestration. (Layer C verify-on-read of signed attestations is PoC-only, not wired into the beta marketplace.) |
+| Database / persistence (SQLite via `better-sqlite3`, `lib/db/`) | Built | Players, item templates, item instances, shop offers, purchase records, marketplace listings + transactions (Layer A), and the SEPARATE `tide_ownership_attestation` table (Layer C, not written by the beta) |
+| Auth/Identity layer (`lib/auth/`) | Built | `loadTideConfig`, `verifyTideJWT` (local JWKS), `withAuth`/`withRole`, `cnf.jkt` assertion |
+| Ownership-authority layer (`OwnershipSpike` Forseti contract) | PoC-verified [Investigation] | Threshold-signs an item→owner-`vuid` statement, VVK-verifiable; binding + rebinding demonstrated. **No supersession/revocation.** NOT extended by the beta; not called by the marketplace |
+| Standalone verifier | PoC-verified [Investigation] | Independent check of an ownership attestation against the realm VVK (demonstrated in the Player B investigation) |
 
 ---
 
@@ -30,7 +46,7 @@ VERIFIED pack guidance.
 |---------|-----------|---------------------|-----------|
 | TideCloak (Docker, `http://localhost:8080`) | OIDC provider + Tide vendor endpoints + IGA | Login/logout, token issuance, doken issuance, adapter export, IGA-governed role/policy changes | [Confirmed] running config in `data/tidecloak.json`; realm `login-app-with-tidecloak` |
 | Tide Fabric / ORK network (`homeOrkUrl`, e.g. `ork1.tideprotocol.com`) | Decentralized threshold-crypto network (T=14/N=20 here) | Threshold PRISM login, threshold VVK JWT signing, **threshold signing of ownership attestations via Forseti** | [Confirmed] endpoints in adapter; [Investigation] the ownership-signing use |
-| Application database | App-owned datastore (engine TBD) | All domain persistence + stored attestations | Not built |
+| Application database | SQLite (`data/app.db`) via `better-sqlite3` | All domain persistence (Layer A) + a separate `tide_ownership_attestation` table (Layer C, unused by the beta) | [Confirmed] built; auto-created + seeded on first use; gitignored |
 | Tide MCP (agent/dev-time only) | The Tide agent pack used during development | Verifying capabilities, playbooks, scenarios | [Confirmed] used for this investigation; **not** a runtime dependency |
 
 > The Tide MCP is a **development-time** aid, not a component of the running system. It is listed only
@@ -48,8 +64,9 @@ wider Tide security functionality. The PoC keeps them in three layers:
   this layer is the *insecure baseline*: editing the `owner` row transfers the item.
 - **Layer B — TideCloak authentication (identity).** OIDC login via the `tidebrowser` flow, DPoP-bound
   tokens, the `vuid` identity claim, server-side JWT verification, and RBAC. This answers *who is
-  making the request*. [Confirmed] wiring exists for login/DPoP/callback; server-side verification is
-  proposed.
+  making the request*. [Confirmed] wiring exists for login/DPoP/callback; **server-side verification is
+  built** (`lib/auth/`: `verifyTideJWT` with local JWKS, `cnf.jkt` assertion, `withAuth`/`withRole`),
+  enforced on every protected route.
 - **Layer C — Wider Tide security (ownership authority).** Threshold-signed ownership attestations
   produced by the existing `OwnershipSpike` Forseti contract that binds an item instance to an owner
   `vuid`, verified against the realm VVK. **Confirmed (2026-10-01):** both Player A and Player B can each
@@ -153,7 +170,7 @@ Legend:
 - **Authentication** — TideCloak + ORK threshold PRISM. Position: between Browser and App;
   identity origin. [Confirmed]
 - **Server-side authorization** — `verifyTideJWT` (local JWKS) + `cnf.jkt` (DPoP) + RBAC in the
-  Application API. Position: guards every protected route/API. [Proposed, pattern VERIFIED]
+  Application API. Position: guards every protected route/API. [Confirmed] built and enforced.
 - **Tide-backed ownership authority** — Forseti contract on the ORKs producing threshold-signed
   ownership attestations. Position: Layer C on top of Layer A data. [Investigation]
 - **Ownership verification** — VVK signature check + `vuid` match + verify-on-read against the DB, in

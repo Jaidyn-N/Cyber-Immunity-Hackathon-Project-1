@@ -156,17 +156,24 @@ scope and forbidden here. Run `npm run typecheck` after each stage and `npm run 
 
 ## Stage J — Testing and documentation
 
-- [ ] 17. Negative / security testing (server-enforced)
-  - [ ] 17.1 Add/collect tests: unauthenticated access (401); cross-player inventory/private-note access (denied); equip not-owned (403); purchase unavailable item (rejected); list unowned (403); list already-listed (rejected); obtain invalid/expired listing (rejected); insufficient currency (rejected); successful purchase; successful marketplace transfer; previous owner loses app access; new owner gains access; private note owner-only; admin-only ops (403 for non-admin); QEA pending change not applied.
-  - [ ] 17.2 Ensure every security-sensitive check is SERVER-side (not frontend); no check weakened to make the demo pass.
+- [x] 17. Negative / security testing (server-enforced) — consolidated repeatable suite at `tests/security/` (`npm run test:security`): 119/119 headless assertions pass, exit 0. Matrix in `docs/SECURITY-TEST-PLAN.md` (groups A–I), with the live-browser (Task 11/12/16) and documented-limitation (threshold=1 → no four-eyes; OwnershipSpike no supersession; obtain is Layer A) boundaries made explicit.
+  - [x] 17.1 Add/collect tests: unauthenticated access (401); cross-player inventory/private-note access (denied); equip not-owned (403); purchase unavailable item (rejected); list unowned (403); list already-listed (rejected); obtain invalid/expired listing (rejected); insufficient currency (rejected); successful purchase; successful marketplace transfer; previous owner loses app access; new owner gains access; private note owner-only; admin-only ops (403 for non-admin); QEA pending change not applied. — consolidated into the persistent suite (A auth 60, B isolation 8, C equip 6, D note 4, E marketplace 22 incl. replay+rollback+0 Layer C rows, F shop 8, G admin/RBAC 6, H QEA allowlist 5; I OwnershipSpike documented). Every negative case also asserts the target state is UNCHANGED.
+  - [x] 17.2 Ensure every security-sensitive check is SERVER-side (not frontend); no check weakened to make the demo pass. — suite invokes the real route handlers/repositories (fixture adapter + temp DB); production source unchanged (only the one npm script added).
   - _Requirements: 1.4, 4.4, 6.2, 6.3, 7.2, 7.5, 9.3, 12.1, 12.2, 13, 17_
 
-- [ ] 18. Documentation and cleanup
-  - [ ] 18.1 Update `docs/LEARNINGS.md`: [Confirmed] implemented features and decisions; [Constraint] Category 3 — rebinding demonstrated (2026-10-01), supersession unresolved, still out of beta scope; any errors + fixes.
-  - [ ] 18.2 Update `docs/DEVELOPMENT-BACKLOG.md`: mark SHOP-1/INV-1/MKT-1 (and DATA-1/AUTH-1/AUTH-2 as applicable) progressed; note temporary-transfer status.
-  - [ ] 18.3 Confirm temp test app files removed; `test-artifacts-temp/` retained; no OwnershipSpike change; DPoP/auth intact.
+- [x] 18. Documentation and cleanup — done 2026-10-08. All docs reconciled to the final state; `README.md`
+    rewritten into a real run guide; `docs/HANDOFF-TEST-PLAN.md` added; cleanup confirmed; `.gitignore`
+    hygiene fixed and accidentally-tracked generated files untracked. Nothing committed. `npm run
+    test:security` 119/119, `typecheck` + `build` clean.
+  - [x] 18.1 Updated `docs/LEARNINGS.md`: dated Task 18 entry — [Confirmed] implemented features/decisions; [Constraint] Category 3 rebinding demonstrated (2026-10-01), supersession unresolved, out of beta scope. Earlier entries + the Player B / Task 11/12/16 addenda preserved.
+  - [x] 18.2 Updated `docs/DEVELOPMENT-BACKLOG.md`: DATA-1/AUTH-1/AUTH-2/SHOP-1/INV-1/MKT-1 + TEST-1 + the Tide security/governance work marked delivered; temporary Layer-A-only transfer status noted; supersession/revocation + exclusive transfer + four-eyes kept open.
+  - [x] 18.3 Confirmed temp test app files removed; `test-artifacts-temp/` retained; no OwnershipSpike/Forseti/Layer C/DPoP/auth/`tidecloak.json`/schema change; DPoP/auth intact.
+  - [x] 18.4 Rewrote `README.md` (one-line stub → full run guide: what/prereqs/install/env-vars-by-name/TideCloak+app startup/DB/login/`_tide_dob.*` governed roles/security suite/docs index). No secret values.
+  - [x] 18.5 Added `docs/HANDOFF-TEST-PLAN.md`: setup, test accounts (A admin w/ `_tide_dob.*`, B second real account — no secrets), numbered core-flow script, Tide auth/access checks, negative/security cases (→ `npm run test:security` + SECURITY-TEST-PLAN), expected results, known limitations, how to reproduce the Task 11/12/16 demonstrations.
+  - [x] 18.6 Cleanup inspection — no temp/diagnostic routes, throwaway scripts, or debug logging; `app/(app)` + `scripts/` clean; OwnershipSpike artifacts + `tests/` + valid config retained.
+  - [x] 18.7 `.gitignore` hygiene — added `data/*.db-shm`/`data/*.db-wal`/`tsconfig.tsbuildinfo`/`next-env.d.ts`; `git rm --cached` on the four tracked generated files (index-only, kept on disk); `.env` confirmed not tracked; nothing committed.
   - _Requirements: documentation; 17 (guards)_
-  - _Checkpoint: final `npm run typecheck` + `npm run build`._
+  - _Checkpoint: final `npm run typecheck` + `npm run build` — clean._
 
 ## Task Dependency Graph
 

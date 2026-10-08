@@ -23,6 +23,14 @@ Design principle throughout: **the DB ownership record is never presented as cry
 ownership.** Layer A ownership answers "what the application currently shows"; Layer C answers "what the
 ORK network cryptographically attested." They are stored and labelled separately.
 
+> **Final build status (2026-10-08, Tasks 0–18 complete).** This design is fully implemented for
+> Category 1 + Category 2. Layer A (SQLite marketplace) and Layer B (TideCloak auth + server-side RBAC)
+> are built and running; the implemented API surface is listed in `docs/SYSTEM-ARCHITECTURE.md`. The
+> private note (Category 2) uses Tide self-encryption with tag `dob` (role names were corrected from the
+> earlier `_tide_privatenote` naming to the realm-provisioned `_tide_dob.*` — see LEARNINGS). Category 3
+> remains as designed: rebinding Demonstrated; **supersession/revocation Unresolved**; the beta
+> marketplace transfer is Layer A only and `OwnershipSpike` is untouched.
+
 ## Architecture
 
 The system keeps the three layers from `docs/SYSTEM-ARCHITECTURE.md` strictly separated:

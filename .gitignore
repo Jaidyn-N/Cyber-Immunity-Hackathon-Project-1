@@ -11,9 +11,15 @@ out/
 data/tidecloak.json
 data/keycloakdb*
 data/*.db
+data/*.db-shm
+data/*.db-wal
 data/*.log
 tidecloak/bootstrap-*.json
 tidecloak/admin-token*
+
+# Generated build artifacts (not source)
+tsconfig.tsbuildinfo
+next-env.d.ts
 
 # Logs and editor files
 *.log
