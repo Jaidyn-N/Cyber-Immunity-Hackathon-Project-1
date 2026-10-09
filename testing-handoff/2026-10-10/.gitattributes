@@ -1,0 +1,2 @@
+# Keep evidence bytes unchanged so the manifest hashes stay valid.
+* -text
