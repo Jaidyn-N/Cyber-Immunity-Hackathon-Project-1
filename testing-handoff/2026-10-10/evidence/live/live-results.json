@@ -1,0 +1,275 @@
+[
+  {
+    "id": "TC-04",
+    "player": "A",
+    "time": "2026-10-09T16:34:23.904Z",
+    "status": "Fail",
+    "detail": "Handoff requires capacity 5; live API capacity is 4\n\n4 !== 5\n",
+    "screenshot": "TC-04-A.png"
+  },
+  {
+    "id": "TC-05",
+    "player": "A",
+    "time": "2026-10-09T16:34:28.710Z",
+    "facts": {
+      "sameOffersAfterRefresh": true,
+      "windowMinutes": 60,
+      "offerCount": 4
+    },
+    "status": "Pass",
+    "screenshot": "TC-04-A.png",
+    "screenshotNote": "The original screenshot is byte-for-byte identical to this shared copy. Recorded facts, time and result are unchanged."
+  },
+  {
+    "id": "TC-06",
+    "player": "A",
+    "time": "2026-10-09T16:34:34.820Z",
+    "facts": {
+      "item": "Aurora Wings",
+      "price": 300,
+      "before": 1000,
+      "after": 700,
+      "http": 200,
+      "successMessage": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-06-A.png"
+  },
+  {
+    "id": "TC-08",
+    "player": "A",
+    "time": "2026-10-09T16:34:46.160Z",
+    "facts": {
+      "purchasedItemPresent": true,
+      "owned": true,
+      "item": "Aurora Wings"
+    },
+    "status": "Pass",
+    "screenshot": "TC-08-A.png"
+  },
+  {
+    "id": "TC-09",
+    "player": "A",
+    "time": "2026-10-09T16:34:49.575Z",
+    "facts": {
+      "http": 200,
+      "inventoryAndAccountMatch": true,
+      "persistsAfterRefresh": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-09-A.png"
+  },
+  {
+    "id": "TC-07",
+    "player": "A",
+    "time": "2026-10-09T16:35:18.762Z",
+    "facts": {
+      "http": 402,
+      "attemptedPrice": 300,
+      "balance": 250,
+      "unchangedBalance": true,
+      "unchangedInventory": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-07-A.png"
+  },
+  {
+    "id": "TC-10",
+    "player": "A",
+    "time": "2026-10-09T16:35:43.884Z",
+    "facts": {
+      "http": 403,
+      "equipmentUnchanged": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-07-A.png",
+    "screenshotNote": "The original screenshot is byte-for-byte identical to this shared copy. Recorded facts, time and result are unchanged."
+  },
+  {
+    "id": "TC-11",
+    "player": "A",
+    "time": "2026-10-09T16:37:20.207Z",
+    "facts": {
+      "http": 200,
+      "item": "Azure Skin",
+      "price": 100,
+      "unequipped": true,
+      "myListingActive": true,
+      "publicListingPresent": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-11-A-retry.png"
+  },
+  {
+    "id": "TC-12",
+    "player": "A",
+    "time": "2026-10-09T16:37:30.178Z",
+    "facts": {
+      "checks": [
+        {
+          "case": "unowned",
+          "http": 403
+        },
+        {
+          "case": "equipped",
+          "http": 409
+        },
+        {
+          "case": "already listed",
+          "http": 409
+        }
+      ],
+      "noNewListing": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-11-A-retry.png",
+    "screenshotNote": "The original screenshot is byte-for-byte identical to this shared copy. Recorded facts, time and result are unchanged."
+  },
+  {
+    "id": "TC-19",
+    "player": "A",
+    "time": "2026-10-09T16:37:47.142Z",
+    "facts": {
+      "http": 409,
+      "balanceAndOwnershipUnchanged": true,
+      "listingStillActive": true,
+      "performedBeforeBPurchase": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-11-A-retry.png",
+    "screenshotNote": "The original screenshot is byte-for-byte identical to this shared copy. Recorded facts, time and result are unchanged."
+  },
+  {
+    "id": "TC-22",
+    "player": "A",
+    "time": "2026-10-09T16:38:18.669Z",
+    "facts": {
+      "A": 403,
+      "B": 403,
+      "roleQueryCannotElevate": true,
+      "noAdminData": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-22-A-retry.png"
+  },
+  {
+    "id": "TC-13",
+    "player": "B",
+    "time": "2026-10-09T16:39:01.778Z",
+    "facts": {
+      "http": 200,
+      "A_before": 250,
+      "A_after": 350,
+      "B_before": 940,
+      "B_after": 840,
+      "price": 100,
+      "ownershipMoved": true,
+      "listingSold": true,
+      "layerAWarningVisible": true
+    },
+    "status": "Pass",
+    "supplementalEvidence": [
+      "final-seller-listing-A-retry.png",
+      "final-b-owner-equipped-B-retry.png"
+    ]
+  },
+  {
+    "id": "TC-14",
+    "player": "B",
+    "time": "2026-10-09T16:39:47.261Z",
+    "facts": {
+      "http": 409,
+      "balancesAndOwnershipUnchanged": true,
+      "realStalePageUsed": true,
+      "freshSDKRequest": true
+    },
+    "status": "Pass"
+  },
+  {
+    "id": "TC-20",
+    "player": "B",
+    "time": "2026-10-09T16:40:34.618Z",
+    "facts": {
+      "ownershipPersists": true,
+      "A_balance": 350,
+      "B_balance": 840
+    },
+    "status": "Pass",
+    "supplementalEvidence": [
+      "final-seller-listing-A-retry.png",
+      "final-b-owner-equipped-B-retry.png"
+    ]
+  },
+  {
+    "id": "TC-21",
+    "player": "B",
+    "time": "2026-10-09T16:41:11.187Z",
+    "facts": {
+      "http": 200,
+      "newOwnerCanEquip": true,
+      "equippedAfterRefresh": true
+    },
+    "status": "Pass",
+    "supplementalEvidence": [
+      "final-seller-listing-A-retry.png",
+      "final-b-owner-equipped-B-retry.png"
+    ]
+  },
+  {
+    "id": "TC-15",
+    "player": "A",
+    "time": "2026-10-09T16:41:49.910Z",
+    "facts": {
+      "bothCrossEquipHttp": 403,
+      "crossReadReturnsCallerOnly": true,
+      "bothPlayersUnchanged": true,
+      "privateNoteQueryChecked": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-15-A-retry.png"
+  },
+  {
+    "id": "TC-18",
+    "player": "A",
+    "time": "2026-10-09T16:42:40.576Z",
+    "facts": {
+      "http": 200,
+      "bodyIdentityIgnored": true,
+      "onlyAEquipmentChanged": true,
+      "BUnchanged": true,
+      "querySpoofingAlsoCheckedInTC15": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-18-A-retry.png"
+  },
+  {
+    "id": "TC-17",
+    "player": "None",
+    "time": "2026-10-09T16:43:33.189Z",
+    "facts": {
+      "protectedPageRedirected": true,
+      "visibleSignInForm": true,
+      "apiHttp": 401,
+      "noCredentialsEntered": true,
+      "initialCheckUsedIncompleteLoginOriginCheck": true
+    },
+    "status": "Pass",
+    "screenshot": null
+  },
+  {
+    "id": "TC-16",
+    "player": "A",
+    "time": "2026-10-09T16:45:08.576Z",
+    "facts": {
+      "ciphertextOnlySent": true,
+      "ciphertextPersists": true,
+      "decrypt": "success",
+      "encryptRoleInToken": true,
+      "decryptRoleInToken": true,
+      "BQueryCannotReadANote": true,
+      "roleGrantNotChanged": true
+    },
+    "status": "Pass",
+    "screenshot": "TC-16-A-retry.png"
+  }
+]

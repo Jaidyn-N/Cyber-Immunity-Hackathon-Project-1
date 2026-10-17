@@ -1,0 +1,11 @@
+# Early browser evidence excerpts
+
+Source: testing-evidence/2026-10-09/163-first-browser-group-observations.md
+
+Recorded: 10 October 2026 at 02:39 Australia/Sydney. These extracts describe the starting state. Later tests are recorded in live-results.json.
+
+TC-01 Pass remains supported by 159: Player A authenticated dashboard, four player navigation links, no Admin link.
+
+TC-02 Pass for the ordinary two-profile login and baseline own-data checks: B Account screenshot 161 is signed in as marketplace-player-b, balance 1000, no equipped item and no note. B Inventory screenshot 162 is signed in as B and has no items. The new A Account screenshot is signed in as marketplace-player-a and shows a different generated display name/partial identity, balance 1000, no equipped item and no note. A Inventory screenshot shows no items. Independent server check 157 verifies different A/B/operator Tide identities and non-admin roles. Each observed profile renders its corresponding identity and baseline data; no other player's content is shown.
+
+TC-03 Pass: actual A Account screenshot shows signed in as marketplace-player-a; generated player-name format; balance 1000; equipped item none; private note stored no; no note stored yet. The generated name and balance match the defaults in lib/auth/currentPlayer.ts. Actual identity/name suffix values are withheld. The A Account raw screenshot was reviewed but not copied to shared evidence because it includes partial identity values; its safe actual results are recorded here.

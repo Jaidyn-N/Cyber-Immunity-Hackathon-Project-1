@@ -1,0 +1,238 @@
+Command: $repoPath=(Get-Location).Path; docker run --rm --name jaidyn-marketplace-security-20261009 --mount "type=bind,source=$repoPath,target=/source,readonly" node:24-bookworm sh /source/testing-evidence/2026-10-09/run-security-docker.sh
+Started UTC: 2026-10-09T04:20:36.0642107+00:00
+Unable to find image 'node:24-bookworm' locally
+24-bookworm: Pulling from library/node
+8cb71386cfcf: Pulling fs layer
+a4edf9c328e8: Pulling fs layer
+c6c71fff0869: Pulling fs layer
+610dc773fbd7: Pulling fs layer
+eb338db91b24: Pulling fs layer
+fe9402ec4126: Pulling fs layer
+ff3af2d57dad: Pulling fs layer
+610dc773fbd7: Waiting
+eb338db91b24: Waiting
+fe9402ec4126: Waiting
+ff3af2d57dad: Waiting
+c0724ad5cdeb: Pulling fs layer
+c0724ad5cdeb: Waiting
+a4edf9c328e8: Verifying Checksum
+a4edf9c328e8: Download complete
+c6c71fff0869: Verifying Checksum
+c6c71fff0869: Download complete
+8cb71386cfcf: Download complete
+eb338db91b24: Verifying Checksum
+eb338db91b24: Download complete
+ff3af2d57dad: Verifying Checksum
+ff3af2d57dad: Download complete
+c0724ad5cdeb: Download complete
+fe9402ec4126: Verifying Checksum
+fe9402ec4126: Download complete
+8cb71386cfcf: Pull complete
+a4edf9c328e8: Pull complete
+610dc773fbd7: Verifying Checksum
+610dc773fbd7: Download complete
+c6c71fff0869: Pull complete
+610dc773fbd7: Pull complete
+eb338db91b24: Pull complete
+fe9402ec4126: Pull complete
+ff3af2d57dad: Pull complete
+c0724ad5cdeb: Pull complete
+Digest: sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
+Status: Downloaded newer image for node:24-bookworm
+Container Node version: v24.21.0
+Container npm version: 11.19.0
+Python: Python 3.11.2
+C++ compiler: g++ (Debian 12.2.0-14+deb12u1) 12.2.0
+
+added 39 packages, and audited 40 packages in 40s
+
+7 packages are looking for funding
+  run `npm fund` for details
+
+3 vulnerabilities (2 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues, run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   @tidecloak/js@0.14.20 (postinstall: node ./scripts/postinstall.cjs)
+npm warn install-scripts   better-sqlite3@13.0.3 (install: node-gyp rebuild)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm notice
+npm notice New major version of npm available! 11.19.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+
+> login-app-with-tidecloak@1.0.0 test:security
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/security/resolve-hook.mjs tests/security/security-suite.mjs
+
+
+=== A. Authentication — all protected routes fail closed (401) ===
+  [PASS] GET  /api/me                                   | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/me                                   | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/me                                   | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/me                                   | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory                            | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory                            | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory                            | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory                            | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory/equip                      | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory/equip                      | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory/equip                      | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/inventory/equip                      | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] POST /api/inventory/equip                      | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] POST /api/inventory/equip                      | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] POST /api/inventory/equip                      | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] POST /api/inventory/equip                      | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/shop                                 | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/shop                                 | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/shop                                 | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/shop                                 | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] POST /api/shop/purchase                        | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] POST /api/shop/purchase                        | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] POST /api/shop/purchase                        | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] POST /api/shop/purchase                        | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace                          | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace                          | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace                          | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace                          | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace/list                     | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace/list                     | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace/list                     | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/marketplace/list                     | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/list                     | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/list                     | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/list                     | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/list                     | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] DEL  /api/marketplace/list/[id]                | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] DEL  /api/marketplace/list/[id]                | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] DEL  /api/marketplace/list/[id]                | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] DEL  /api/marketplace/list/[id]                | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/obtain                   | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/obtain                   | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/obtain                   | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] POST /api/marketplace/obtain                   | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/account/private-note                 | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/account/private-note                 | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/account/private-note                 | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/account/private-note                 | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] PUT  /api/account/private-note                 | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] PUT  /api/account/private-note                 | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] PUT  /api/account/private-note                 | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] PUT  /api/account/private-note                 | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/admin/summary                        | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/admin/summary                        | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/admin/summary                        | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] GET  /api/admin/summary                        | invalid signature              | call route                     | exp=401                    | act=401
+  [PASS] POST /api/admin/private-note-role              | no Authorization header        | call route                     | exp=401                    | act=401
+  [PASS] POST /api/admin/private-note-role              | token missing cnf.jkt          | call route                     | exp=401                    | act=401
+  [PASS] POST /api/admin/private-note-role              | expired token                  | call route                     | exp=401                    | act=401
+  [PASS] POST /api/admin/private-note-role              | invalid signature              | call route                     | exp=401                    | act=401
+
+=== B. Player isolation — identity from JWT only (Task 13 core subset) ===
+  [PASS] me ignores query vuid                          | A authed, ?vuid=B              | GET /api/me                    | exp=aaaaaaaaaaaaaaaaaaaaa… | act=aaaaaaaaaaaaaaaaaaaaa…
+  [PASS] inventory excludes B's item                    | A authed; B owns item          | GET /api/inventory             | exp=false                  | act=false
+  [PASS] private-note GET is self-only                  | A authed; B has note           | GET private-note               | exp=null                   | act=null
+  [PASS] private-note PUT can't target B                | A PUT body vuid=B              | PUT private-note               | exp=B-SECRET-CIPHERTEXT    | act=B-SECRET-CIPHERTEXT
+  [PASS] A can't equip B's item                         | A POST equip B's item          | POST equip                     | exp=403                    | act=403
+  [PASS] A can't list B's item                          | A POST list B's item           | POST marketplace/list          | exp=403                    | act=403
+  [PASS] B owner unchanged                              | after A's spoof attempts       | read owner                     | exp=bbbbbbbbbbbbbbbbbbbbb… | act=bbbbbbbbbbbbbbbbbbbbb…
+  [PASS] B player row unchanged                         | after A's spoof attempts       | snapshot B                     | exp={"b":1000,"eq":null,"… | act={"b":1000,"eq":null,"…
+
+=== C. Inventory / equip ===
+  [PASS] equip owned item                               | A owns item                    | POST equip own                 | exp=200                    | act=200
+  [PASS] equipped persisted                             | after equip                    | read equipped                  | exp=2fa5755c-789d-4886-a9… | act=2fa5755c-789d-4886-a9…
+  [PASS] equip other's item                             | A targets B's item             | POST equip not-owned           | exp=403                    | act=403
+  [PASS] A equipped unchanged                           | after 403                      | read A equipped                | exp=2fa5755c-789d-4886-a9… | act=2fa5755c-789d-4886-a9…
+  [PASS] B equipped unchanged                           | after A's 403 attempt          | read B equipped                | exp=9afa1c98-904c-438f-b8… | act=9afa1c98-904c-438f-b8…
+  [PASS] equip missing item                             | unknown instanceId             | POST equip                     | exp=404                    | act=404
+
+=== D. Private note — opaque ciphertext, self-only, no server crypto ===
+  [PASS] ciphertext stored verbatim                     | A PUTs opaque blob             | GET returns same bytes         | exp=eyJ0YWciOiJkb2IiLbase… | act=eyJ0YWciOiJkb2IiLbase…
+  [PASS] A cannot GET B's ciphertext                    | B has distinct note            | A GET private-note             | exp=eyJ0YWciOiJkb2IiLbase… | act=eyJ0YWciOiJkb2IiLbase…
+  [PASS] PUT body vuid ignored                          | A PUT body vuid=B              | B ciphertext unchanged         | exp=B-ONLY-CIPHERTEXT      | act=B-ONLY-CIPHERTEXT
+  [PASS] no server-side crypto/governance               | scan route code (no comments)  | grep forbidden symbols         | exp=false                  | act=false
+
+=== E. Marketplace (Layer A application-level temporary transfer — NOT Tide-backed) ===
+  [PASS] B lists own item                               | B owns tradable item           | POST list                      | exp=200                    | act=200
+  [PASS] A can't list B's item                          | A targets B's item             | POST list                      | exp=403                    | act=403
+  [PASS] A can't cancel B's listing                     | A targets B's listing          | DELETE list/[id]               | exp=403                    | act=403
+  [PASS] B's listing still active                       | after A's cancel attempt       | read listing status            | exp=active                 | act=active
+  [PASS] A obtains B's listing                          | A authed; spoofed body ids     | POST obtain                    | exp=200                    | act=200
+  [PASS] ownership moved to A (buyer=JWT)               | spoofed buyer=B ignored        | read owner                     | exp=aaaaaaaaaaaaaaaaaaaaa… | act=aaaaaaaaaaaaaaaaaaaaa…
+  [PASS] buyer debited (A)                              | price 100                      | read A balance                 | exp=900                    | act=900
+  [PASS] seller credited (B)                            | price 100                      | read B balance                 | exp=1100                   | act=1100
+  [PASS] obtain writes NO Layer C row                   | Layer A/C boundary             | count attestations             | exp=0                      | act=0
+  [PASS] replay obtain rejected                         | listing already sold           | POST obtain again              | exp=409                    | act=409
+  [PASS] no second transfer on replay                   | after replay 409               | read owner                     | exp=aaaaaaaaaaaaaaaaaaaaa… | act=aaaaaaaaaaaaaaaaaaaaa…
+  [PASS] insufficient funds rejected                    | B balance 5 < price            | POST obtain                    | exp=402                    | act=402
+  [PASS] no partial debit on 402                        | after 402                      | read B balance                 | exp=5                      | act=5
+  [PASS] no credit to seller on 402                     | after 402                      | read A balance                 | exp=900                    | act=900
+  [PASS] ownership unchanged on 402                     | after 402                      | read owner                     | exp=aaaaaaaaaaaaaaaaaaaaa… | act=aaaaaaaaaaaaaaaaaaaaa…
+  [PASS] listing still active on 402                    | after 402                      | read listing status            | exp=active                 | act=active
+  [PASS] obtain cancelled listing                       | listing cancelled              | POST obtain                    | exp=409                    | act=409
+  [PASS] forced fault injected                          | spy throws at tx INSERT        | run obtain                     | exp=true                   | act=true
+  [PASS] rollback: owner unchanged                      | after injected fault           | read owner                     | exp=aaaaaaaaaaaaaaaaaaaaa… | act=aaaaaaaaaaaaaaaaaaaaa…
+  [PASS] rollback: buyer balance unchanged              | after injected fault           | read B balance                 | exp=1000                   | act=1000
+  [PASS] rollback: seller balance unchanged             | after injected fault           | read A balance                 | exp=1000                   | act=1000
+  [PASS] rollback: listing still active                 | after injected fault           | read listing status            | exp=active                 | act=active
+
+=== F. Shop / purchase — server authoritative ===
+  [PASS] purchase unknown offer                         | bogus offerId                  | POST purchase                  | exp=404                    | act=404
+  [PASS] purchase out-of-rotation                       | stale/unknown offer id         | POST purchase                  | exp=404                    | act=404
+  [PASS] purchase insufficient funds                    | A balance 0                    | POST purchase                  | exp=402                    | act=402
+  [PASS] no partial deduction                           | after 402                      | read balance                   | exp=0                      | act=0
+  [PASS] no item minted on 402                          | after 402                      | count inventory                | exp=5                      | act=5
+  [PASS] purchase success                               | A funded; spoofed price=1,buy… | POST purchase                  | exp=200                    | act=200
+  [PASS] server price authoritative                     | client sent price=1            | check pricePaid                | exp=100                    | act=100
+  [PASS] buyer=JWT not body                             | client sent buyer=B            | check item owner               | exp=aaaaaaaaaaaaaaaaaaaaa… | act=aaaaaaaaaaaaaaaaaaaaa…
+
+=== G. Admin / RBAC — role from JWT only ===
+  [PASS] admin no auth                                  | no token                       | GET admin/summary              | exp=401                    | act=401
+  [PASS] admin non-admin forbidden                      | player A (no admin role)       | GET admin/summary              | exp=403                    | act=403
+  [PASS] admin allowed                                  | token has admin realm role     | GET admin/summary              | exp=200                    | act=200
+  [PASS] summary is aggregate-only                      | admin response body            | scan for private fields        | exp=false                  | act=false
+  [PASS] ?role=admin does not elevate                   | non-admin + query role=admin   | GET admin/summary              | exp=403                    | act=403
+  [PASS] spoofed admin flags ignored                    | non-admin body isAdmin=true    | POST admin role route          | exp=403                    | act=403
+
+=== H. QEA boundary — allowlist enforced before any governance call (IGA stubbed) ===
+  [PASS] arbitrary role rejected                        | admin requests role=admin      | POST role route                | exp=422                    | act=422
+  [PASS] no governance call on reject                   | allowlist blocks first         | check IGA fetch seam           | exp=false                  | act=false
+  [PASS] escalation role rejected                       | admin requests realm-manageme… | POST role route                | exp=422                    | act=422
+  [PASS] allowlist is exactly the two roles             | read exported constant         | compare                        | exp=_tide_dob.selfdecrypt… | act=_tide_dob.selfdecrypt…
+  [PASS] no approve/commit automation                   | scan igaAdmin code (no commen… | grep approve/commit            | exp=false                  | act=false
+  [DOCUMENTED] Live Task 11 QEA change request (CR 1957ce7d…) was approved+committed in the browser
+               enclave on 2026-10-01 with threshold = 1. Because threshold = 1, FOUR-EYES /
+               TWO-PERSON APPROVAL WAS NOT DEMONSTRATED. This is a documented LIMITATION, not a headless
+               result, and is explicitly NOT claimed as proven here.
+
+=== I. Ownership PoC boundary — DOCUMENTED evidence (not headless; OwnershipSpike untouched) ===
+  [DOCUMENTED] Preserved OwnershipSpike evidence (LEARNINGS, 2026-10-01):
+    - A→A attestation verifies; B→B attestation verifies; cross-VUID verification is rejected.
+    - Rebinding to a second owner (Player B) is DEMONSTRATED.
+    - SUPERSESSION / REVOCATION is NOT demonstrated: A's prior signature STILL verifies after B's.
+  This suite does NOT execute or modify OwnershipSpike/Forseti; the marketplace 'obtain' is a Layer A
+  application-level temporary transfer, explicitly NOT Tide-backed (asserted in Group E: 0 Layer C rows).
+
+============ SECURITY SUITE SUMMARY ============
+  A. Authentication — all protected routes fail closed (401)    60 pass / 0 fail
+  B. Player isolation — identity from JWT only (Task 13 core …  8 pass / 0 fail
+  C. Inventory / equip                                          6 pass / 0 fail
+  D. Private note — opaque ciphertext, self-only, no server c…  4 pass / 0 fail
+  E. Marketplace (Layer A application-level temporary transfe…  22 pass / 0 fail
+  F. Shop / purchase — server authoritative                     8 pass / 0 fail
+  G. Admin / RBAC — role from JWT only                          6 pass / 0 fail
+  H. QEA boundary — allowlist enforced before any governance …  5 pass / 0 fail
+  I. Ownership PoC boundary — DOCUMENTED evidence (not headle…  0 pass / 0 fail
+------------------------------------------------
+  TOTAL: 119/119 passed, 0 failed
+================================================
+
+SECURITY SUITE PASSED.
+Exit code: 0
